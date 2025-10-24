@@ -1,13 +1,4 @@
 {
-  "scraping": {
-    "default_mode": "range",
-    "months_back": 6,
-    "months_forward": 0,
-    "base_url": "https://www.forexfactory.com/calendar",
-    "timeout": 30,
-    "retry_attempts": 3,
-    "headless": true
-  },
   "scheduler": {
     "run_time": "06:00",
     "timezone": "local"
@@ -42,5 +33,19 @@
     "level": "INFO",
     "file": "logs/app.log",
     "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  },
+  "investing_com": {
+    "enabled": true,
+    "default_mode": "range",
+    "months_back": 11,
+    "months_forward": 0,
+    "base_url": "https://www.investing.com/economic-calendar/Service/getCalendarFilteredData",
+    "countries": [
+      25, 32, 6, 37, 72, 22, 17, 39, 14, 10, 35, 43, 56, 36, 110, 11, 26, 12, 4,
+      5
+    ],
+    "timezone": 55,
+    "timeout": 30,
+    "retry_attempts": 3
   }
 }

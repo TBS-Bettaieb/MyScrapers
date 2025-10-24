@@ -14,7 +14,7 @@ import pandas as pd
 # Add src directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from scraper import ForexFactoryScraper
+from investing_scraper import InvestingComScraper
 from symbol_mapper import SymbolMapper
 from csv_exporter import CSVExporter
 
@@ -105,22 +105,31 @@ def run_pipeline(config: Dict, mode: str = 'range', target_date: datetime = None
     
     try:
         # Initialize components
-        scraping_config = config.get('scraping', {})
+        investing_config = config.get('investing_com', {})
         output_config = config.get('output', {})
+        
+        # Check if Investing.com scraper is enabled
+        if not investing_config.get('enabled', False):
+            logger.error("Investing.com scraper is not enabled in config")
+            return False
         
         symbol_mapper = SymbolMapper()
         csv_output_path = resolve_path(output_config.get('csv_path', 'output/economic_events.csv'))
         csv_exporter = CSVExporter(csv_output_path)
         
-        # Initialize scraper with CSV exporter and symbol mapper for immediate saving
-        scraper = ForexFactoryScraper(
-            base_url=scraping_config.get('base_url', 'https://www.forexfactory.com/calendar'),
-            timeout=scraping_config.get('timeout', 30),
-            retry_attempts=scraping_config.get('retry_attempts', 3),
+        # Initialize Investing.com scraper
+        investing_scraper = InvestingComScraper(
+            base_url=investing_config.get('base_url', 'https://www.investing.com/economic-calendar/Service/getCalendarFilteredData'),
+            timeout=investing_config.get('timeout', 30),
+            retry_attempts=investing_config.get('retry_attempts', 3),
             csv_exporter=csv_exporter,
             symbol_mapper=symbol_mapper,
-            headless=scraping_config.get('headless', True)  # Default to headless mode
+            countries=investing_config.get('countries', []),
+            timezone=investing_config.get('timezone', 55)
         )
+        logger.info("Investing.com scraper initialized")
+        
+        all_events = []
         
         if mode == 'daily':
             # Daily mode: scrape single date
@@ -134,15 +143,17 @@ def run_pipeline(config: Dict, mode: str = 'range', target_date: datetime = None
             if not scrape_only and csv_exporter:
                 logger.info("Daily mode: appending to existing CSV file")
             
-            # Scrape single day
-            events = scraper.scrape_single_day(target_date)
-            logger.info(f"Daily scrape completed: {len(events)} events found")
+            # Scrape from Investing.com
+            logger.info(f"Scraping Investing.com for {target_date.date()}")
+            events = investing_scraper.scrape_single_day(target_date)
+            all_events.extend(events)
+            logger.info(f"Investing.com scrape completed: {len(events)} events found")
             
         else:
             # Range mode: scrape date range
             # Calculate date range using months instead of days
-            months_back = scraping_config.get('months_back', 3)
-            months_forward = scraping_config.get('months_forward', 3)
+            months_back = investing_config.get('months_back', 3)
+            months_forward = investing_config.get('months_forward', 0)
             
             # Convert months to approximate days for calculation (using 30 days per month)
             days_back = months_back * 30
@@ -153,16 +164,26 @@ def run_pipeline(config: Dict, mode: str = 'range', target_date: datetime = None
             
             logger.info(f"Range mode: scraping events from {start_date.date()} to {end_date.date()}")
             
-            # Note: CSV file will be managed by deduplication logic in per-day saving
-            # No need to clear existing data - deduplication will handle it
-            
-            # Scrape events (data will be saved to CSV after each page)
-            logger.info("Starting range data scraping...")
-            events = scraper.scrape_date_range(start_date, end_date)
-            logger.info(f"Range scrape completed: {len(events)} events found")
+            # Scrape from Investing.com
+            logger.info(f"Starting Investing.com range data scraping...")
+            events = investing_scraper.scrape_date_range(start_date, end_date)
+            all_events.extend(events)
+            logger.info(f"Investing.com range scrape completed: {len(events)} events found")
+        
+        # Remove duplicates based on DateTime, Event, and Currency
+        if all_events:
+            # Convert to DataFrame for deduplication
+            df = pd.DataFrame(all_events)
+            if 'DateTime' in df.columns:
+                df['DateTime'] = pd.to_datetime(df['DateTime'])
+            df = df.drop_duplicates(subset=['DateTime', 'Event', 'Currency'], keep='first')
+            all_events = df.to_dict('records')
+            logger.info(f"After deduplication: {len(all_events)} unique events")
+        
+        events = all_events
         
         if not events:
-            logger.warning("No events scraped - this may indicate an issue with the scraper or no events in the date range")
+            logger.warning("No events scraped - this may indicate an issue with the scrapers or no events in the date range")
             # Don't fail immediately, continue with empty dataset to see if it's a real issue
             events = []
         
@@ -173,7 +194,8 @@ def run_pipeline(config: Dict, mode: str = 'range', target_date: datetime = None
             logger.info(f"Pipeline completed successfully with {len(mapped_events)} events processed")
             return True
         
-        # Save events to CSV (different handling for daily vs range mode)
+        # Save events to CSV (only if scrapers didn't save already, or for final merge)
+        # Note: Individual scrapers may have saved incrementally, but we do a final merge here
         if events and csv_exporter:
             try:
                 # Map events to trading pairs before saving
@@ -187,8 +209,13 @@ def run_pipeline(config: Dict, mode: str = 'range', target_date: datetime = None
                     else:
                         logger.warning("Daily mode: failed to append events to CSV")
                 else:
-                    # Range mode: data should already be saved incrementally, but verify
-                    logger.info("Range mode: data has been saved incrementally during scraping")
+                    # Range mode: data may have been saved incrementally, but do final deduplication
+                    logger.info("Range mode: performing final CSV merge and deduplication")
+                    success = csv_exporter.append_with_deduplication(mapped_events)
+                    if success:
+                        logger.info(f"Range mode: merged {len(mapped_events)} events to CSV")
+                    else:
+                        logger.warning("Range mode: failed to merge events to CSV")
                 
                 # Get final file info to confirm everything was saved
                 file_info = csv_exporter.get_file_info()
@@ -228,8 +255,6 @@ def main():
                        help='Only scrape data without exporting to CSV')
     parser.add_argument('--test', action='store_true',
                        help='Test mode: scrape only last 7 days')
-    parser.add_argument('--no-headless', action='store_true',
-                       help='Disable headless mode (show browser window)')
     parser.add_argument('--mode', choices=['daily', 'range'], 
                        default=None, help='Scraping mode (overrides config)')
     parser.add_argument('--date', type=str, 
@@ -245,7 +270,8 @@ def main():
     logger = logging.getLogger(__name__)
     
     # Determine scraping mode (CLI overrides config)
-    mode = args.mode or config.get('scraping', {}).get('default_mode', 'range')
+    investing_config = config.get('investing_com', {})
+    mode = args.mode or investing_config.get('default_mode', 'range')
     
     # Parse target date for daily mode
     target_date = None
@@ -265,14 +291,11 @@ def main():
     # Test mode adjustment
     if args.test:
         # Use approximately 1 month for test mode instead of 7 days
-        config['scraping']['months_back'] = 1
-        config['scraping']['months_forward'] = 1
+        if 'investing_com' not in config:
+            config['investing_com'] = {}
+        config['investing_com']['months_back'] = 1
+        config['investing_com']['months_forward'] = 1
         logger.info("Test mode enabled: fetching 1 month back and forward")
-    
-    # Headless mode adjustment
-    if args.no_headless:
-        config['scraping']['headless'] = False
-        logger.info("Headless mode disabled: browser window will be visible")
     
     logger.info("Starting Economic News Manager Pipeline")
     

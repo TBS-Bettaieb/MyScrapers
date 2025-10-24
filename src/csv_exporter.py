@@ -266,6 +266,9 @@ class CSVExporter:
             # Add/update with new events
             updated_count = 0
             added_count = 0
+            holiday_events = [e for e in new_events if e.get('Impact') == 'Holiday']
+            logger.info(f"Processing {len(holiday_events)} Holiday events in new events")
+            
             for event in new_events:
                 key = (event.get('DateTime', ''), event.get('Event', ''))
                 if key[0] and key[1]:  # Only process if both DateTime and Event exist
@@ -273,15 +276,22 @@ class CSVExporter:
                         # Update existing event
                         events_dict[key] = event
                         updated_count += 1
-                        logger.debug(f"Updated existing event: {key[1]} on {key[0]}")
+                        if event.get('Impact') == 'Holiday':
+                            logger.debug(f"Updated Holiday event: {key[1]} on {key[0]}")
                     else:
                         # Add new event
                         events_dict[key] = event
                         added_count += 1
+                        if event.get('Impact') == 'Holiday':
+                            logger.debug(f"Added Holiday event: {key[1]} on {key[0]}")
                         logger.debug(f"Added new event: {key[1]} on {key[0]}")
             
             # Convert back to list and sort by DateTime (newest first)
             all_events = list(events_dict.values())
+            
+            # Count holidays in final events
+            final_holidays = [e for e in all_events if e.get('Impact') == 'Holiday']
+            logger.info(f"Final events after deduplication: {len(all_events)} total, {len(final_holidays)} holidays")
             
             # Sort by DateTime (newest first)
             try:
