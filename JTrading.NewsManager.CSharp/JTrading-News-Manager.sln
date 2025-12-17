@@ -1,0 +1,42 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JTrading.NewsManager", "JTrading.NewsManager.csproj", "{216B8ADC-77FA-D7CE-8084-4D2BA351BC12}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JTrading.NewsManager.Domain", "JTrading.NewsManager.Domain\JTrading.NewsManager.Domain.csproj", "{F6A4C5C3-6C0E-4E22-9F2E-5E1F9E6C9D11}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JTrading.NewsManager.Application", "JTrading.NewsManager.Application\JTrading.NewsManager.Application.csproj", "{A2C4C8B9-3E4F-4B1C-9C9A-8F5B7D3E2A44}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JTrading.NewsManager.Infrastructure", "JTrading.NewsManager.Infrastructure\JTrading.NewsManager.Infrastructure.csproj", "{C4B1D2E3-F456-4A89-9ABC-1234567890AB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{216B8ADC-77FA-D7CE-8084-4D2BA351BC12}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{216B8ADC-77FA-D7CE-8084-4D2BA351BC12}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{216B8ADC-77FA-D7CE-8084-4D2BA351BC12}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{216B8ADC-77FA-D7CE-8084-4D2BA351BC12}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F6A4C5C3-6C0E-4E22-9F2E-5E1F9E6C9D11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F6A4C5C3-6C0E-4E22-9F2E-5E1F9E6C9D11}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F6A4C5C3-6C0E-4E22-9F2E-5E1F9E6C9D11}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F6A4C5C3-6C0E-4E22-9F2E-5E1F9E6C9D11}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2C4C8B9-3E4F-4B1C-9C9A-8F5B7D3E2A44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2C4C8B9-3E4F-4B1C-9C9A-8F5B7D3E2A44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2C4C8B9-3E4F-4B1C-9C9A-8F5B7D3E2A44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2C4C8B9-3E4F-4B1C-9C9A-8F5B7D3E2A44}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C4B1D2E3-F456-4A89-9ABC-1234567890AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C4B1D2E3-F456-4A89-9ABC-1234567890AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C4B1D2E3-F456-4A89-9ABC-1234567890AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C4B1D2E3-F456-4A89-9ABC-1234567890AB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {58534F34-38B5-4F76-A82A-61CC768CD1D5}
+	EndGlobalSection
+EndGlobal
