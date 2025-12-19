@@ -42,6 +42,20 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### 4. Installer les navigateurs Playwright
+
+Crawl4AI utilise Playwright pour le scraping. Après l'installation des dépendances, vous devez installer les navigateurs :
+
+```bash
+python -m playwright install chromium
+```
+
+Ou pour installer tous les navigateurs :
+
+```bash
+python -m playwright install
+```
+
 ## Utilisation
 
 ### Mode 1 : Script CLI

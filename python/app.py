@@ -5,8 +5,9 @@ Utilise FastAPI pour créer une API REST asynchrone
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, HttpUrl
-from typing import Optional
+from typing import Optional, List
 from scraper import scrape_url
+from investing_scraper import scrape_economic_calendar
 
 # Créer l'application FastAPI
 app = FastAPI(
@@ -31,6 +32,37 @@ class ScrapeResponse(BaseModel):
     error_message: Optional[str] = None
 
 
+class InvestingEvent(BaseModel):
+    """Modèle pour un événement économique"""
+    time: str
+    country: str
+    event: str
+    actual: str
+    forecast: str
+    previous: str
+    impact: str
+
+
+class InvestingScrapeRequest(BaseModel):
+    """Modèle de requête pour le scraping investing.com"""
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    countries: Optional[List[int]] = None
+    categories: Optional[List[str]] = None
+    importance: Optional[List[int]] = None
+    timezone: Optional[int] = 58
+    time_filter: Optional[str] = "timeRemain"
+
+
+class InvestingScrapeResponse(BaseModel):
+    """Modèle de réponse pour le scraping investing.com"""
+    success: bool
+    events: List[InvestingEvent]
+    date_range: dict
+    total_events: int
+    error_message: Optional[str] = None
+
+
 @app.get("/")
 async def root():
     """Endpoint racine avec informations sur l'API"""
@@ -40,6 +72,8 @@ async def root():
         "endpoints": {
             "GET /scrape": "Scraper une URL via query parameter",
             "POST /scrape": "Scraper une URL via body JSON",
+            "GET /scrape/investing": "Scraper le calendrier économique investing.com (GET)",
+            "POST /scrape/investing": "Scraper le calendrier économique investing.com (POST)",
             "GET /health": "Vérifier l'état de l'API",
             "GET /docs": "Documentation interactive (Swagger UI)"
         }
@@ -103,6 +137,103 @@ async def scrape_post(request: ScrapeRequest):
                 status_code=400,
                 detail=f"Erreur lors du scraping: {result['error_message']}"
             )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur serveur: {str(e)}"
+        )
+
+
+@app.get("/scrape/investing", response_model=InvestingScrapeResponse)
+async def scrape_investing_get(
+    date_from: Optional[str] = Query(None, description="Date de début (YYYY-MM-DD)"),
+    date_to: Optional[str] = Query(None, description="Date de fin (YYYY-MM-DD)"),
+    timezone: Optional[int] = Query(58, description="ID du fuseau horaire"),
+    time_filter: Optional[str] = Query("timeRemain", description="Filtre temporel")
+):
+    """
+    Scraper le calendrier économique d'investing.com via GET
+    
+    Args:
+        date_from: Date de début au format YYYY-MM-DD
+        date_to: Date de fin au format YYYY-MM-DD
+        timezone: ID du fuseau horaire (défaut: 58 pour GMT+1)
+        time_filter: Filtre temporel (défaut: timeRemain)
+    
+    Returns:
+        InvestingScrapeResponse avec les événements économiques
+    """
+    try:
+        result = await scrape_economic_calendar(
+            date_from=date_from,
+            date_to=date_to,
+            timezone=timezone,
+            time_filter=time_filter
+        )
+        
+        if result["success"]:
+            # Convertir les événements en modèles Pydantic
+            events = [InvestingEvent(**event) for event in result["events"]]
+            return InvestingScrapeResponse(
+                success=True,
+                events=events,
+                date_range=result["date_range"],
+                total_events=result["total_events"],
+                error_message=None
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Erreur lors du scraping: {result.get('error_message', 'Erreur inconnue')}"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur serveur: {str(e)}"
+        )
+
+
+@app.post("/scrape/investing", response_model=InvestingScrapeResponse)
+async def scrape_investing_post(request: InvestingScrapeRequest):
+    """
+    Scraper le calendrier économique d'investing.com via POST
+    
+    Args:
+        request: InvestingScrapeRequest contenant les filtres de scraping
+    
+    Returns:
+        InvestingScrapeResponse avec les événements économiques
+    """
+    try:
+        result = await scrape_economic_calendar(
+            date_from=request.date_from,
+            date_to=request.date_to,
+            countries=request.countries,
+            categories=request.categories,
+            importance=request.importance,
+            timezone=request.timezone,
+            time_filter=request.time_filter
+        )
+        
+        if result["success"]:
+            # Convertir les événements en modèles Pydantic
+            events = [InvestingEvent(**event) for event in result["events"]]
+            return InvestingScrapeResponse(
+                success=True,
+                events=events,
+                date_range=result["date_range"],
+                total_events=result["total_events"],
+                error_message=None
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Erreur lors du scraping: {result.get('error_message', 'Erreur inconnue')}"
+            )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
