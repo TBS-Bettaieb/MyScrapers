@@ -51,7 +51,7 @@ class InvestingScrapeRequest(BaseModel):
     categories: Optional[List[str]] = None
     importance: Optional[List[int]] = None
     timezone: Optional[int] = 58
-    time_filter: Optional[str] = "timeRemain"
+    time_filter: Optional[str] = "timeOnly"
 
 
 class InvestingScrapeResponse(BaseModel):
@@ -149,7 +149,7 @@ async def scrape_investing_get(
     date_from: Optional[str] = Query(None, description="Date de début (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Date de fin (YYYY-MM-DD)"),
     timezone: Optional[int] = Query(58, description="ID du fuseau horaire"),
-    time_filter: Optional[str] = Query("timeRemain", description="Filtre temporel")
+    time_filter: Optional[str] = Query("timeOnly", description="Filtre temporel")
 ):
     """
     Scraper le calendrier économique d'investing.com via GET
@@ -158,7 +158,7 @@ async def scrape_investing_get(
         date_from: Date de début au format YYYY-MM-DD
         date_to: Date de fin au format YYYY-MM-DD
         timezone: ID du fuseau horaire (défaut: 58 pour GMT+1)
-        time_filter: Filtre temporel (défaut: timeRemain)
+        time_filter: Filtre temporel (défaut: timeOnly)
     
     Returns:
         InvestingScrapeResponse avec les événements économiques

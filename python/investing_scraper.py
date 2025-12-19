@@ -5,6 +5,7 @@ Utilise Crawl4AI pour interagir avec le formulaire et extraire les événements 
 import asyncio
 import json
 import re
+import os
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from crawl4ai import AsyncWebCrawler
@@ -18,7 +19,7 @@ async def scrape_economic_calendar(
     categories: Optional[List[str]] = None,
     importance: Optional[List[int]] = None,
     timezone: int = 58,
-    time_filter: str = "timeRemain"
+    time_filter: str = "timeOnly"
 ) -> Dict[str, Any]:
     """
     Scrape le calendrier économique d'investing.com
@@ -30,7 +31,7 @@ async def scrape_economic_calendar(
         categories: Liste des catégories à filtrer (None = toutes)
         importance: Liste des niveaux d'importance [1,2,3] (None = tous)
         timezone: ID du fuseau horaire (58 = GMT+1)
-        time_filter: Filtre temporel ("timeRemain" = événements restants)
+        time_filter: Filtre temporel ("timeOnly" = événements avec heure uniquement)
     
     Returns:
         Dictionnaire contenant:
@@ -163,6 +164,18 @@ async def scrape_economic_calendar(
                     "error_message": f"Erreur lors de l'appel API: {api_result.error_message}"
                 }
             
+            # DEBUG: Sauvegarder le HTML pour analyse
+            try:
+                import tempfile
+                debug_dir = tempfile.gettempdir()
+                debug_file = os.path.join(debug_dir, 'investing_debug.html')
+                html_content = api_result.html or api_result.cleaned_html or ""
+                with open(debug_file, 'w', encoding='utf-8') as f:
+                    f.write(html_content)
+                print(f"DEBUG: HTML sauvegardé dans {debug_file}")
+            except Exception as debug_error:
+                print(f"DEBUG: Erreur lors de la sauvegarde du HTML: {debug_error}")
+            
             # Extraire les données depuis le JavaScript
             try:
                 html_content = api_result.html or api_result.cleaned_html or ""
@@ -173,7 +186,21 @@ async def scrape_economic_calendar(
                 if body and body.get('data-calendar-json'):
                     try:
                         json_data = json.loads(body.get('data-calendar-json'))
-                        events = parse_json_response(json_data)
+                        # DEBUG: Sauvegarder le JSON pour analyse
+                        try:
+                            import tempfile
+                            debug_dir = tempfile.gettempdir()
+                            json_file = os.path.join(debug_dir, 'investing_debug.json')
+                            with open(json_file, 'w', encoding='utf-8') as f:
+                                json.dump(json_data, f, indent=2, ensure_ascii=False)
+                            print(f"DEBUG: JSON sauvegardé dans {json_file}")
+                        except Exception as debug_error:
+                            print(f"DEBUG: Erreur lors de la sauvegarde du JSON: {debug_error}")
+                        parse_result = parse_json_response(json_data)
+                        if parse_result.get("success"):
+                            events = parse_result.get("events", [])
+                        else:
+                            events = []
                     except json.JSONDecodeError:
                         events = parse_calendar_data(api_result)
                 elif body and body.get('data-calendar-error'):
@@ -231,52 +258,111 @@ async def scrape_economic_calendar(
         }
 
 
-def parse_json_response(json_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+def parse_json_response(json_data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Parse la réponse JSON de l'API investing.com
+    Parse la réponse complète de l'API investing.com
     
     Args:
-        json_data: Dictionnaire JSON de la réponse API
+        json_data: Réponse JSON de l'API contenant le HTML dans data['data']
     
     Returns:
-        Liste des événements économiques formatés
+        Dict avec events groupés par jour
     """
-    events = []
+    events_by_day = {}
+    current_day = None
+    all_events = []
     
     try:
-        # La structure de la réponse peut varier
-        # Chercher les données dans différentes structures possibles
-        if 'data' in json_data:
-            data = json_data['data']
-            
-            # Si data est une string HTML
-            if isinstance(data, str):
-                soup = BeautifulSoup(data, 'html.parser')
-                events = parse_html_table(soup)
-            # Si data est une liste d'événements
-            elif isinstance(data, list):
-                for item in data:
-                    if isinstance(item, dict):
-                        events.append(format_event(item))
-            # Si data est un dict avec une liste d'événements
-            elif isinstance(data, dict):
-                if 'events' in data:
-                    for item in data['events']:
-                        events.append(format_event(item))
-                elif 'rows' in data:
-                    for item in data['rows']:
-                        events.append(format_event(item))
+        # Le HTML est dans json_data['data']
+        if 'data' not in json_data:
+            return {
+                "success": False,
+                "error": "Pas de données dans la réponse",
+                "events": [],
+                "events_by_day": {},
+                "total_events": 0,
+                "days_count": 0
+            }
         
-        # Chercher directement des événements dans la racine
-        if not events and 'events' in json_data:
-            for item in json_data['events']:
-                events.append(format_event(item))
+        html_content = json_data['data']
+        
+        # Si data n'est pas une string HTML, essayer d'autres formats
+        if not isinstance(html_content, str):
+            # Fallback pour les autres formats
+            if isinstance(html_content, list):
+                for item in html_content:
+                    if isinstance(item, dict):
+                        formatted = format_event(item)
+                        all_events.append(formatted)
+            elif isinstance(html_content, dict):
+                if 'events' in html_content:
+                    for item in html_content['events']:
+                        formatted = format_event(item)
+                        all_events.append(formatted)
+                elif 'rows' in html_content:
+                    for item in html_content['rows']:
+                        formatted = format_event(item)
+                        all_events.append(formatted)
+            
+            return {
+                "success": True,
+                "total_events": len(all_events),
+                "events": all_events,
+                "events_by_day": {},
+                "days_count": 0
+            }
+        
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Trouver toutes les lignes <tr>
+        rows = soup.find_all('tr')
+        
+        for row in rows:
+            # 1. Vérifier si c'est un en-tête de jour
+            day_header = parse_day_header(row)
+            if day_header:
+                current_day = day_header
+                if current_day not in events_by_day:
+                    events_by_day[current_day] = []
+                continue
+            
+            # 2. Vérifier si c'est un jour férié
+            holiday = parse_holiday_row(row)
+            if holiday:
+                if current_day:
+                    holiday['day'] = current_day
+                    events_by_day[current_day].append(holiday)
+                all_events.append(holiday)
+                continue
+            
+            # 3. Vérifier si c'est un événement normal (id = eventRowId_*)
+            event_id = row.get('id', '')
+            if event_id.startswith('eventRowId_'):
+                event = parse_event_row(row)
+                if event:
+                    # Ajouter le jour à l'événement
+                    if current_day:
+                        event['day'] = current_day
+                        events_by_day[current_day].append(event)
+                    all_events.append(event)
+        
+        return {
+            "success": True,
+            "total_events": len(all_events),
+            "events": all_events,
+            "events_by_day": events_by_day,
+            "days_count": len(events_by_day)
+        }
         
     except Exception as e:
-        print(f"Erreur lors du parsing JSON: {e}")
-        events = []
-    
-    return events
+        return {
+            "success": False,
+            "error": str(e),
+            "events": [],
+            "events_by_day": {},
+            "total_events": 0,
+            "days_count": 0
+        }
 
 
 def parse_calendar_data(crawl_result) -> List[Dict[str, Any]]:
@@ -302,13 +388,14 @@ def parse_calendar_data(crawl_result) -> List[Dict[str, Any]]:
             data = json.loads(json_str)
             
             # Parser la structure JSON d'investing.com
-            if 'data' in data and isinstance(data['data'], str):
-                # Les données peuvent être dans une propriété 'data' en HTML
-                html_data = data['data']
-                soup = BeautifulSoup(html_data, 'html.parser')
-                events = parse_html_table(soup)
-            elif 'data' in data and isinstance(data['data'], list):
-                events = [format_event(event) for event in data['data']]
+            if 'data' in data:
+                parse_result = parse_json_response(data)
+                if parse_result.get("success"):
+                    events = parse_result.get("events", [])
+                else:
+                    # Fallback: parser le HTML directement
+                    soup = BeautifulSoup(html_content, 'html.parser')
+                    events = parse_html_table(soup)
             else:
                 events = parse_html_table(BeautifulSoup(html_content, 'html.parser'))
         else:
@@ -326,7 +413,7 @@ def parse_calendar_data(crawl_result) -> List[Dict[str, Any]]:
 
 def parse_html_table(soup: BeautifulSoup) -> List[Dict[str, Any]]:
     """
-    Parse la table HTML du calendrier économique
+    Parse la table HTML du calendrier économique (fallback method)
     
     Args:
         soup: BeautifulSoup object du HTML
@@ -335,25 +422,36 @@ def parse_html_table(soup: BeautifulSoup) -> List[Dict[str, Any]]:
         Liste des événements économiques
     """
     events = []
+    current_day = None
     
     try:
-        # Chercher la table du calendrier économique
-        # La structure peut varier, on cherche plusieurs sélecteurs possibles
-        table = soup.find('table', {'id': 'economicCalendarData'}) or \
-                soup.find('table', class_=re.compile(r'calendar|economic', re.I)) or \
-                soup.find('tbody', {'id': 'economicCalendarData'})
-        
-        if not table:
-            # Chercher toutes les lignes de données
-            rows = soup.find_all('tr', class_=re.compile(r'js-event-item|event', re.I))
-        else:
-            rows = table.find_all('tr', class_=re.compile(r'js-event-item|event', re.I))
+        # Trouver toutes les lignes <tr>
+        rows = soup.find_all('tr')
         
         for row in rows:
             try:
-                event = parse_event_row(row)
-                if event:
-                    events.append(event)
+                # Vérifier si c'est un en-tête de jour
+                day_header = parse_day_header(row)
+                if day_header:
+                    current_day = day_header
+                    continue
+                
+                # Vérifier si c'est un jour férié
+                holiday = parse_holiday_row(row)
+                if holiday:
+                    if current_day:
+                        holiday['day'] = current_day
+                    events.append(holiday)
+                    continue
+                
+                # Vérifier si c'est un événement normal (id = eventRowId_*)
+                event_id = row.get('id', '')
+                if event_id.startswith('eventRowId_'):
+                    event = parse_event_row(row)
+                    if event:
+                        if current_day:
+                            event['day'] = current_day
+                        events.append(event)
             except Exception as e:
                 # Continuer avec la ligne suivante en cas d'erreur
                 continue
@@ -366,7 +464,7 @@ def parse_html_table(soup: BeautifulSoup) -> List[Dict[str, Any]]:
 
 def parse_event_row(row) -> Optional[Dict[str, Any]]:
     """
-    Parse une ligne d'événement économique
+    Parse une ligne d'événement économique avec la structure investing.com
     
     Args:
         row: BeautifulSoup element d'une ligne <tr>
@@ -375,60 +473,162 @@ def parse_event_row(row) -> Optional[Dict[str, Any]]:
         Dictionnaire représentant l'événement ou None
     """
     try:
-        cells = row.find_all(['td', 'th'])
-        if len(cells) < 5:
+        # Extraire l'ID et le timestamp depuis les attributs
+        event_id = row.get('id', '').replace('eventRowId_', '')
+        event_datetime = row.get('data-event-datetime', '')
+        
+        # Sélecteurs CSS pour chaque colonne
+        time_cell = row.find('td', class_='time')
+        flag_cell = row.find('td', class_='flagCur')
+        sentiment_cell = row.find('td', class_='sentiment')
+        event_cell = row.find('td', class_='event')
+        
+        # Valeurs avec IDs spécifiques (eventActual_ID, eventForecast_ID, etc.)
+        actual_cell = row.find('td', id=f'eventActual_{event_id}') if event_id else None
+        forecast_cell = row.find('td', id=f'eventForecast_{event_id}') if event_id else None
+        previous_cell = row.find('td', id=f'eventPrevious_{event_id}') if event_id else None
+        
+        # === EXTRACTION DU PAYS ===
+        country = ""
+        country_code = ""
+        if flag_cell:
+            # Le pays est dans l'attribut title du span
+            flag_span = flag_cell.find('span', title=True)
+            if flag_span:
+                country = flag_span.get('title', '')
+            # Le code devise (JPY, EUR, USD) est dans le texte
+            text = flag_cell.get_text(strip=True)
+            # Chercher un code de 3 lettres (devise)
+            currency_match = re.search(r'\b([A-Z]{3})\b', text)
+            if currency_match:
+                country_code = currency_match.group(1)
+        
+        # === EXTRACTION DU NOM DE L'ÉVÉNEMENT ===
+        event_name = ""
+        event_url = ""
+        if event_cell:
+            # Le nom est dans le lien <a>
+            event_link = event_cell.find('a')
+            if event_link:
+                event_name = extract_text(event_link)
+                event_url = event_link.get('href', '')
+        
+        # === EXTRACTION DE L'IMPACT (BULLS) ===
+        impact = "Medium"  # Par défaut
+        if sentiment_cell:
+            # Compter les icônes de bulls pleins
+            bulls = sentiment_cell.find_all('i', class_='grayFullBullishIcon')
+            num_bulls = len(bulls)
+            
+            if num_bulls >= 3:
+                impact = "High"     # 🐂🐂🐂
+            elif num_bulls == 2:
+                impact = "Medium"   # 🐂🐂
+            elif num_bulls == 1:
+                impact = "Low"      # 🐂
+        
+        # === EXTRACTION DES VALEURS ===
+        actual = extract_text(actual_cell) if actual_cell else ""
+        forecast = extract_text(forecast_cell) if forecast_cell else ""
+        previous = extract_text(previous_cell) if previous_cell else ""
+        
+        # === EXTRACTION DU TEMPS ===
+        time_str = extract_text(time_cell) if time_cell else ""
+        
+        # Ne retourner que si on a un nom d'événement
+        if not event_name:
             return None
         
-        # Structure typique: time, country, event, actual, forecast, previous, impact
-        event_data = {
-            "time": extract_text(cells[0]) if len(cells) > 0 else "",
-            "country": extract_text(cells[1]) if len(cells) > 1 else "",
-            "event": extract_text(cells[2]) if len(cells) > 2 else "",
-            "actual": extract_text(cells[3]) if len(cells) > 3 else "",
-            "forecast": extract_text(cells[4]) if len(cells) > 4 else "",
-            "previous": extract_text(cells[5]) if len(cells) > 5 else "",
-            "impact": extract_impact(row)
+        # Retourner l'événement formaté
+        return {
+            "time": time_str,
+            "datetime": event_datetime,  # Format: "2025/01/07 04:35:00"
+            "country": country,
+            "country_code": country_code,
+            "event": event_name,
+            "event_url": event_url,
+            "actual": actual,
+            "forecast": forecast,
+            "previous": previous,
+            "impact": impact,
+            "event_id": event_id
         }
         
-        return format_event(event_data)
-        
     except Exception as e:
+        print(f"Erreur parsing event row: {e}")
         return None
 
 
-def extract_text(element) -> str:
-    """Extrait le texte d'un élément HTML en nettoyant les espaces"""
-    if element:
-        text = element.get_text(strip=True)
-        return text
-    return ""
-
-
-def extract_impact(row) -> str:
-    """Extrait le niveau d'impact depuis les classes CSS ou icônes"""
+def parse_day_header(row) -> Optional[str]:
+    """
+    Parse les lignes d'en-tête de jour
+    
+    Args:
+        row: BeautifulSoup element <tr>
+    
+    Returns:
+        String du jour (ex: "Tuesday, January 7, 2025") ou None
+    """
     try:
-        # Chercher les classes d'impact (bull, bear, etc.)
-        impact_classes = row.get('class', [])
-        for cls in impact_classes:
-            if 'bull' in cls.lower() or 'high' in cls.lower():
-                return "High"
-            elif 'bear' in cls.lower() or 'low' in cls.lower():
-                return "Low"
-            elif 'medium' in cls.lower():
-                return "Medium"
+        day_cell = row.find('td', class_='theDay')
+        if day_cell:
+            return extract_text(day_cell)
+    except Exception as e:
+        print(f"Erreur parsing day header: {e}")
+    return None
+
+
+def parse_holiday_row(row) -> Optional[Dict[str, Any]]:
+    """
+    Parse les lignes de jours fériés
+    
+    Args:
+        row: BeautifulSoup element <tr>
+    
+    Returns:
+        Dict avec les infos du jour férié ou None
+    """
+    try:
+        cells = row.find_all('td')
+        if len(cells) < 3:
+            return None
         
-        # Chercher les icônes d'impact
-        impact_icons = row.find_all(['i', 'span'], class_=re.compile(r'bull|bear|impact', re.I))
-        if impact_icons:
-            icon_class = impact_icons[0].get('class', [])
-            if any('bull' in c.lower() or 'high' in c.lower() for c in icon_class):
-                return "High"
-            elif any('bear' in c.lower() or 'low' in c.lower() for c in icon_class):
-                return "Low"
+        # Vérifier si c'est un jour férié
+        holiday_span = cells[2].find('span', class_='bold')
+        if not holiday_span or extract_text(holiday_span) != 'Holiday':
+            return None
         
-        return "Medium"
-    except:
-        return "Medium"
+        # Extraire le pays
+        country = ""
+        country_cell = cells[1]
+        if country_cell:
+            flag_span = country_cell.find('span', title=True)
+            if flag_span:
+                country = flag_span.get('title', '')
+        
+        # Nom du jour férié
+        holiday_name = extract_text(cells[3]) if len(cells) > 3 else ""
+        
+        return {
+            "type": "holiday",
+            "time": extract_text(cells[0]),
+            "country": country,
+            "event": holiday_name,
+            "impact": "Holiday"
+        }
+        
+    except Exception as e:
+        print(f"Erreur parsing holiday: {e}")
+    return None
+
+
+def extract_text(element) -> str:
+    """Extrait et nettoie le texte d'un élément HTML"""
+    if element is None:
+        return ""
+    text = element.get_text(strip=True)
+    # Remplacer les caractères non-breaking spaces
+    return text.replace('\xa0', ' ')
 
 
 def format_event(event_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -443,11 +643,16 @@ def format_event(event_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     return {
         "time": event_data.get("time", ""),
+        "datetime": event_data.get("datetime", ""),
+        "day": event_data.get("day", ""),
         "country": event_data.get("country", ""),
+        "country_code": event_data.get("country_code", ""),
         "event": event_data.get("event", ""),
+        "event_url": event_data.get("event_url", ""),
         "actual": event_data.get("actual", ""),
         "forecast": event_data.get("forecast", ""),
         "previous": event_data.get("previous", ""),
-        "impact": event_data.get("impact", "Medium")
+        "impact": event_data.get("impact", "Medium"),
+        "event_id": event_data.get("event_id", "")
     }
 
