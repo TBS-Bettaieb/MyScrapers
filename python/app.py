@@ -2,12 +2,17 @@
 API REST pour le scraping web avec Crawl4AI
 Utilise FastAPI pour créer une API REST asynchrone
 """
+import logging
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, ValidationError
 from typing import Optional, List
 from scraper import scrape_url
 from investing_scraper import scrape_economic_calendar
+
+# Configuration du logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Créer l'application FastAPI
 app = FastAPI(
@@ -34,13 +39,19 @@ class ScrapeResponse(BaseModel):
 
 class InvestingEvent(BaseModel):
     """Modèle pour un événement économique"""
-    time: str
-    country: str
-    event: str
-    actual: str
-    forecast: str
-    previous: str
-    impact: str
+    time: str = ""
+    datetime: Optional[str] = None
+    parsed_datetime: Optional[str] = None
+    day: Optional[str] = None
+    country: str = ""
+    country_code: Optional[str] = None
+    event: str = ""
+    event_url: Optional[str] = None
+    actual: str = ""
+    forecast: str = ""
+    previous: str = ""
+    impact: str = ""
+    event_id: Optional[str] = None
 
 
 class InvestingScrapeRequest(BaseModel):
@@ -171,24 +182,68 @@ async def scrape_investing_get(
             time_filter=time_filter
         )
         
+        logger.info(f"Scraping result: success={result.get('success')}, total_events={result.get('total_events', 0)}")
+        
         if result["success"]:
             # Convertir les événements en modèles Pydantic
-            events = [InvestingEvent(**event) for event in result["events"]]
+            events = []
+            for event in result["events"]:
+                try:
+                    # S'assurer que tous les champs requis sont présents
+                    event_data = {
+                        "time": event.get("time", ""),
+                        "datetime": event.get("datetime"),
+                        "parsed_datetime": event.get("parsed_datetime"),
+                        "day": event.get("day"),
+                        "country": event.get("country", ""),
+                        "country_code": event.get("country_code"),
+                        "event": event.get("event", ""),
+                        "event_url": event.get("event_url"),
+                        "actual": event.get("actual", ""),
+                        "forecast": event.get("forecast", ""),
+                        "previous": event.get("previous", ""),
+                        "impact": event.get("impact", ""),
+                        "event_id": event.get("event_id")
+                    }
+                    events.append(InvestingEvent(**event_data))
+                except ValidationError as e:
+                    logger.error(f"Erreur de validation pour l'événement: {event}, erreur: {e}")
+                    # Continuer avec les autres événements même si un échoue
+                    continue
+                except Exception as e:
+                    logger.error(f"Erreur lors de la conversion de l'événement: {event}, erreur: {str(e)}")
+                    continue
+            
+            if not events:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Aucun événement valide n'a pu être converti"
+                )
+            
             return InvestingScrapeResponse(
                 success=True,
                 events=events,
                 date_range=result["date_range"],
-                total_events=result["total_events"],
+                total_events=len(events),
                 error_message=None
             )
         else:
+            error_msg = result.get('error_message', 'Erreur inconnue')
+            logger.error(f"Scraping échoué: {error_msg}")
             raise HTTPException(
                 status_code=400,
-                detail=f"Erreur lors du scraping: {result.get('error_message', 'Erreur inconnue')}"
+                detail=f"Erreur lors du scraping: {error_msg}"
             )
     except HTTPException:
         raise
+    except ValidationError as e:
+        logger.error(f"Erreur de validation Pydantic: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Erreur de validation des données: {str(e)}"
+        )
     except Exception as e:
+        logger.error(f"Erreur serveur: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Erreur serveur: {str(e)}"
