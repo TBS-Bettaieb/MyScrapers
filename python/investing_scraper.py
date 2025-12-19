@@ -535,6 +535,15 @@ def parse_event_row(row) -> Optional[Dict[str, Any]]:
         # === EXTRACTION DU TEMPS ===
         time_str = extract_text(time_cell) if time_cell else ""
         
+        # === PARSER LA DATE EN ISO 8601 ===
+        parsed_datetime = ""
+        if event_datetime:
+            try:
+                parsed_dt = datetime.strptime(event_datetime, '%Y/%m/%d %H:%M:%S')
+                parsed_datetime = parsed_dt.isoformat()  # "2025-01-07T04:35:00"
+            except Exception as e:
+                print(f"Erreur parsing datetime: {e}")
+        
         # Ne retourner que si on a un nom d'événement
         if not event_name:
             return None
@@ -543,6 +552,7 @@ def parse_event_row(row) -> Optional[Dict[str, Any]]:
         return {
             "time": time_str,
             "datetime": event_datetime,  # Format: "2025/01/07 04:35:00"
+            "parsed_datetime": parsed_datetime,  # Format ISO 8601: "2025-01-07T04:35:00"
             "country": country,
             "country_code": country_code,
             "event": event_name,
@@ -641,10 +651,29 @@ def format_event(event_data: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Dictionnaire formaté avec tous les champs standardisés
     """
+    # Parser datetime en ISO si disponible et non déjà parsé
+    parsed_datetime = event_data.get("parsed_datetime", "")
+    if not parsed_datetime and event_data.get("datetime"):
+        try:
+            parsed_dt = datetime.strptime(event_data["datetime"], '%Y/%m/%d %H:%M:%S')
+            parsed_datetime = parsed_dt.isoformat()
+        except Exception:
+            pass
+    
+    # Extraire day depuis datetime si absent
+    day = event_data.get("day", "")
+    if not day and event_data.get("datetime"):
+        try:
+            parsed_dt = datetime.strptime(event_data["datetime"], '%Y/%m/%d %H:%M:%S')
+            day = parsed_dt.strftime('%A, %B %d, %Y')  # "Friday, December 20, 2024"
+        except Exception:
+            pass
+    
     return {
         "time": event_data.get("time", ""),
         "datetime": event_data.get("datetime", ""),
-        "day": event_data.get("day", ""),
+        "parsed_datetime": parsed_datetime,
+        "day": day,
         "country": event_data.get("country", ""),
         "country_code": event_data.get("country_code", ""),
         "event": event_data.get("event", ""),
