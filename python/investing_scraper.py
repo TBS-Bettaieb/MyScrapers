@@ -272,6 +272,9 @@ async def scrape_economic_calendar(
             formData.append('limit_from', '0');
             
             try {{
+                console.log('[DEBUG] Envoi de la requête fetch...');
+                console.log('[DEBUG] FormData:', formData.toString().substring(0, 200));
+                
                 const response = await fetch('https://www.investing.com/economic-calendar/Service/getCalendarFilteredData', {{
                     method: 'POST',
                     headers: {{
@@ -281,10 +284,32 @@ async def scrape_economic_calendar(
                     body: formData.toString()
                 }});
                 
+                console.log('[DEBUG] Réponse reçue, status:', response.status);
+                console.log('[DEBUG] Response ok:', response.ok);
+                
+                if (!response.ok) {{
+                    const errorText = await response.text();
+                    console.log('[DEBUG] Erreur HTTP:', response.status, errorText.substring(0, 200));
+                    window.__investing_calendar_error = 'HTTP ' + response.status + ': ' + errorText.substring(0, 100);
+                    return {{ error: 'HTTP ' + response.status }};
+                }}
+                
                 const data = await response.json();
+                console.log('[DEBUG] JSON parsé, type:', typeof data);
+                console.log('[DEBUG] Clés du JSON:', Object.keys(data));
+                console.log('[DEBUG] Présence de data.data:', !!data.data);
+                if (data.data) {{
+                    console.log('[DEBUG] Type de data.data:', typeof data.data);
+                    console.log('[DEBUG] Taille de data.data:', data.data.length);
+                }}
+                
                 window.__investing_calendar_data = data;
+                console.log('[DEBUG] Données stockées dans window.__investing_calendar_data');
                 return data;
             }} catch (error) {{
+                console.log('[DEBUG] Exception lors de la requête:', error);
+                console.log('[DEBUG] Message d\'erreur:', error.message);
+                console.log('[DEBUG] Stack:', error.stack);
                 window.__investing_calendar_error = error.message;
                 return {{ error: error.message }};
             }}
@@ -318,24 +343,39 @@ async def scrape_economic_calendar(
             # Exécuter le script JavaScript pour appeler l'API et stocker le résultat
             js_code_with_return = js_code + """
             // Attendre un peu pour que la requête se termine
+            console.log('[DEBUG] Attente de 2 secondes pour la requête API...');
             await new Promise(resolve => setTimeout(resolve, 2000));
             
-            // Retourner les données ou une indication d'erreur
+            // Debug: Vérifier ce qui existe
+            console.log('[DEBUG] window.__investing_calendar_data existe:', !!window.__investing_calendar_data);
+            console.log('[DEBUG] window.__investing_calendar_error existe:', !!window.__investing_calendar_error);
+            
             if (window.__investing_calendar_data) {
+                console.log('[DEBUG] Données trouvées, taille:', JSON.stringify(window.__investing_calendar_data).length);
+                console.log('[DEBUG] Type de données:', typeof window.__investing_calendar_data);
+                console.log('[DEBUG] Clés disponibles:', Object.keys(window.__investing_calendar_data));
+                
                 // Créer un élément script pour stocker le JSON (pas de limite de taille)
                 const scriptElement = document.createElement('script');
                 scriptElement.id = 'investing-calendar-data';
                 scriptElement.type = 'application/json';
                 scriptElement.textContent = JSON.stringify(window.__investing_calendar_data);
                 document.body.appendChild(scriptElement);
+                console.log('[DEBUG] Élément script créé et ajouté au body');
                 
                 // Marquer comme chargé
                 document.body.setAttribute('data-calendar-loaded', 'true');
+                console.log('[DEBUG] Attribut data-calendar-loaded ajouté');
             } else if (window.__investing_calendar_error) {
+                console.log('[DEBUG] Erreur détectée:', window.__investing_calendar_error);
                 document.body.setAttribute('data-calendar-error', window.__investing_calendar_error);
+            } else {
+                console.log('[DEBUG] Aucune donnée ni erreur trouvée dans window');
+                document.body.setAttribute('data-calendar-status', 'no-data');
             }
             """
             
+            print("DEBUG: Exécution du script JavaScript avec wait_for='body[data-calendar-loaded]'")
             api_result = await crawler.arun(
                 url="https://www.investing.com/economic-calendar/",
                 js_code=js_code_with_return,
@@ -343,6 +383,21 @@ async def scrape_economic_calendar(
                 page_timeout=60000,
                 delay_before_return_html=2.0
             )
+            
+            print(f"DEBUG: api_result.success = {api_result.success}")
+            if api_result.error_message:
+                print(f"DEBUG: api_result.error_message = {api_result.error_message}")
+            
+            # Si le wait_for n'a pas fonctionné, essayer sans wait_for
+            if not api_result.success or not (api_result.html or api_result.cleaned_html):
+                print("DEBUG: Tentative sans wait_for (timeout ou élément non trouvé)")
+                api_result = await crawler.arun(
+                    url="https://www.investing.com/economic-calendar/",
+                    js_code=js_code_with_return,
+                    page_timeout=60000,
+                    delay_before_return_html=3.0
+                )
+                print(f"DEBUG: Retry - api_result.success = {api_result.success}")
             
             if not api_result.success:
                 return {
@@ -359,6 +414,9 @@ async def scrape_economic_calendar(
                 debug_dir = tempfile.gettempdir()
                 debug_file = os.path.join(debug_dir, 'investing_debug.html')
                 html_content = api_result.html or api_result.cleaned_html or ""
+                print(f"DEBUG: Taille du HTML récupéré: {len(html_content)} caractères")
+                print(f"DEBUG: api_result.html existe: {api_result.html is not None}")
+                print(f"DEBUG: api_result.cleaned_html existe: {api_result.cleaned_html is not None}")
                 with open(debug_file, 'w', encoding='utf-8') as f:
                     f.write(html_content)
                 print(f"DEBUG: HTML sauvegardé dans {debug_file}")
@@ -368,11 +426,36 @@ async def scrape_economic_calendar(
             # Extraire les données avec JsonCssExtractionStrategy
             try:
                 html_content = api_result.html or api_result.cleaned_html or ""
+                print(f"DEBUG: Début extraction - Taille HTML: {len(html_content)} caractères")
                 
                 # Extraire le JSON depuis l'élément script (minimal BeautifulSoup)
                 soup = BeautifulSoup(html_content, 'html.parser')
                 body = soup.find('body')
+                
+                print(f"DEBUG: Body trouvé: {body is not None}")
+                if body:
+                    print(f"DEBUG: Attributs du body: {dict(body.attrs) if body.attrs else 'Aucun'}")
+                    print(f"DEBUG: data-calendar-loaded: {body.get('data-calendar-loaded', 'NON TROUVÉ')}")
+                    print(f"DEBUG: data-calendar-error: {body.get('data-calendar-error', 'NON TROUVÉ')}")
+                    print(f"DEBUG: data-calendar-status: {body.get('data-calendar-status', 'NON TROUVÉ')}")
+                
+                # Chercher tous les scripts pour debug
+                all_scripts = soup.find_all('script')
+                print(f"DEBUG: Nombre total de scripts trouvés: {len(all_scripts)}")
+                for i, script in enumerate(all_scripts[:5]):  # Afficher les 5 premiers
+                    script_id = script.get('id', 'pas d\'id')
+                    script_type = script.get('type', 'pas de type')
+                    script_len = len(script.string or '')
+                    print(f"DEBUG: Script #{i+1}: id='{script_id}', type='{script_type}', taille={script_len}")
+                
                 script_element = soup.find('script', {'id': 'investing-calendar-data', 'type': 'application/json'})
+                print(f"DEBUG: Script element avec id='investing-calendar-data' trouvé: {script_element is not None}")
+                
+                if script_element:
+                    print(f"DEBUG: script_element.string existe: {script_element.string is not None}")
+                    if script_element.string:
+                        print(f"DEBUG: Taille de script_element.string: {len(script_element.string)} caractères")
+                        print(f"DEBUG: Premiers 200 caractères: {script_element.string[:200]}")
                 
                 if script_element and script_element.string:
                     try:
@@ -413,16 +496,46 @@ async def scrape_economic_calendar(
                         events = extract_events_with_strategy(html_content)
                         
                 elif body and body.get('data-calendar-error'):
+                    error_msg = body.get('data-calendar-error')
+                    print(f"DEBUG: Erreur JavaScript détectée dans body: {error_msg}")
                     return {
                         "success": False,
                         "events": [],
                         "date_range": {"from": date_from, "to": date_to},
                         "total_events": 0,
-                        "error_message": f"Erreur JavaScript: {body.get('data-calendar-error')}"
+                        "error_message": f"Erreur JavaScript: {error_msg}"
                     }
+                elif body and body.get('data-calendar-status') == 'no-data':
+                    print("DEBUG: ===== STATUS 'NO-DATA' DÉTECTÉ =====")
+                    print("DEBUG: Le JavaScript n'a pas trouvé de données dans window.__investing_calendar_data")
+                    print("DEBUG: Cela peut indiquer que:")
+                    print("DEBUG:   - La requête fetch a échoué silencieusement")
+                    print("DEBUG:   - La réponse n'était pas au format attendu")
+                    print("DEBUG:   - Le timing était insuffisant")
+                    # Essayer quand même l'extraction directe
+                    events = extract_events_with_strategy(html_content)
                 else:
                     # Fallback: extraction directe du HTML de la page
-                    print("DEBUG: Aucune donnée JSON trouvée, extraction directe du HTML")
+                    print("DEBUG: ===== AUCUNE DONNÉE JSON TROUVÉE =====")
+                    print(f"DEBUG: script_element existe: {script_element is not None}")
+                    if script_element:
+                        print(f"DEBUG: script_element.string: {script_element.string is not None and len(script_element.string or '') > 0}")
+                    print(f"DEBUG: body existe: {body is not None}")
+                    if body:
+                        print(f"DEBUG: body a data-calendar-error: {body.get('data-calendar-error') is not None}")
+                        print(f"DEBUG: body a data-calendar-status: {body.get('data-calendar-status') is not None}")
+                    print(f"DEBUG: Recherche de window.__investing_calendar_data dans le HTML...")
+                    # Chercher des références à __investing_calendar_data dans le HTML
+                    if '__investing_calendar_data' in html_content:
+                        print("DEBUG: Référence à __investing_calendar_data trouvée dans le HTML")
+                        # Extraire un extrait autour de cette référence
+                        idx = html_content.find('__investing_calendar_data')
+                        start = max(0, idx - 100)
+                        end = min(len(html_content), idx + 200)
+                        print(f"DEBUG: Contexte autour de __investing_calendar_data: {html_content[start:end]}")
+                    else:
+                        print("DEBUG: Aucune référence à __investing_calendar_data trouvée dans le HTML")
+                    print(f"DEBUG: Extraction directe du HTML (taille: {len(html_content)} caractères)")
                     events = extract_events_with_strategy(html_content)
                 
                 return {
