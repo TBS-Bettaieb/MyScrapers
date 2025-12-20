@@ -65,12 +65,24 @@ class InvestingScrapeRequest(BaseModel):
     time_filter: Optional[str] = "timeOnly"
 
 
+class InvestingHoliday(BaseModel):
+    """Modèle pour un jour férié"""
+    type: str = "holiday"
+    time: str = ""
+    day: Optional[str] = None
+    country: str = ""
+    event: str = ""
+    impact: str = "Holiday"
+
+
 class InvestingScrapeResponse(BaseModel):
     """Modèle de réponse pour le scraping investing.com"""
     success: bool
     events: List[InvestingEvent]
+    holidays: List[InvestingHoliday]
     date_range: dict
     total_events: int
+    total_holidays: int
     error_message: Optional[str] = None
 
 
@@ -185,27 +197,42 @@ async def scrape_investing_get(
         logger.info(f"Scraping result: success={result.get('success')}, total_events={result.get('total_events', 0)}")
         
         if result["success"]:
-            # Convertir les événements en modèles Pydantic
+            # Séparer les événements économiques des jours fériés
             events = []
+            holidays = []
+
             for event in result["events"]:
                 try:
-                    # S'assurer que tous les champs requis sont présents
-                    event_data = {
-                        "time": event.get("time", ""),
-                        "datetime": event.get("datetime"),
-                        "parsed_datetime": event.get("parsed_datetime"),
-                        "day": event.get("day"),
-                        "country": event.get("country", ""),
-                        "country_code": event.get("country_code"),
-                        "event": event.get("event", ""),
-                        "event_url": event.get("event_url"),
-                        "actual": event.get("actual", ""),
-                        "forecast": event.get("forecast", ""),
-                        "previous": event.get("previous", ""),
-                        "impact": event.get("impact", ""),
-                        "event_id": event.get("event_id")
-                    }
-                    events.append(InvestingEvent(**event_data))
+                    # Vérifier si c'est un jour férié
+                    if event.get("type") == "holiday" or event.get("impact") == "Holiday":
+                        # C'est un jour férié
+                        holiday_data = {
+                            "type": "holiday",
+                            "time": event.get("time", ""),
+                            "day": event.get("day"),
+                            "country": event.get("country", ""),
+                            "event": event.get("event", ""),
+                            "impact": "Holiday"
+                        }
+                        holidays.append(InvestingHoliday(**holiday_data))
+                    else:
+                        # C'est un événement économique
+                        event_data = {
+                            "time": event.get("time", ""),
+                            "datetime": event.get("datetime"),
+                            "parsed_datetime": event.get("parsed_datetime"),
+                            "day": event.get("day"),
+                            "country": event.get("country", ""),
+                            "country_code": event.get("country_code"),
+                            "event": event.get("event", ""),
+                            "event_url": event.get("event_url"),
+                            "actual": event.get("actual", ""),
+                            "forecast": event.get("forecast", ""),
+                            "previous": event.get("previous", ""),
+                            "impact": event.get("impact", ""),
+                            "event_id": event.get("event_id")
+                        }
+                        events.append(InvestingEvent(**event_data))
                 except ValidationError as e:
                     logger.error(f"Erreur de validation pour l'événement: {event}, erreur: {e}")
                     # Continuer avec les autres événements même si un échoue
@@ -213,18 +240,20 @@ async def scrape_investing_get(
                 except Exception as e:
                     logger.error(f"Erreur lors de la conversion de l'événement: {event}, erreur: {str(e)}")
                     continue
-            
-            if not events:
+
+            if not events and not holidays:
                 raise HTTPException(
                     status_code=400,
-                    detail="Aucun événement valide n'a pu être converti"
+                    detail="Aucun événement ou jour férié valide n'a pu être converti"
                 )
-            
+
             return InvestingScrapeResponse(
                 success=True,
                 events=events,
+                holidays=holidays,
                 date_range=result["date_range"],
                 total_events=len(events),
+                total_holidays=len(holidays),
                 error_message=None
             )
         else:
@@ -273,13 +302,41 @@ async def scrape_investing_post(request: InvestingScrapeRequest):
         )
         
         if result["success"]:
-            # Convertir les événements en modèles Pydantic
-            events = [InvestingEvent(**event) for event in result["events"]]
+            # Séparer les événements économiques des jours fériés
+            events = []
+            holidays = []
+
+            for event in result["events"]:
+                try:
+                    # Vérifier si c'est un jour férié
+                    if event.get("type") == "holiday" or event.get("impact") == "Holiday":
+                        # C'est un jour férié
+                        holiday_data = {
+                            "type": "holiday",
+                            "time": event.get("time", ""),
+                            "day": event.get("day"),
+                            "country": event.get("country", ""),
+                            "event": event.get("event", ""),
+                            "impact": "Holiday"
+                        }
+                        holidays.append(InvestingHoliday(**holiday_data))
+                    else:
+                        # C'est un événement économique
+                        events.append(InvestingEvent(**event))
+                except ValidationError as e:
+                    logger.error(f"Erreur de validation pour l'événement: {event}, erreur: {e}")
+                    continue
+                except Exception as e:
+                    logger.error(f"Erreur lors de la conversion de l'événement: {event}, erreur: {str(e)}")
+                    continue
+
             return InvestingScrapeResponse(
                 success=True,
                 events=events,
+                holidays=holidays,
                 date_range=result["date_range"],
-                total_events=result["total_events"],
+                total_events=len(events),
+                total_holidays=len(holidays),
                 error_message=None
             )
         else:
