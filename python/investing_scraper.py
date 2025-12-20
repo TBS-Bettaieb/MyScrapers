@@ -8,10 +8,448 @@ import re
 import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
+from enum import IntEnum
 import httpx
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
+
+
+# =============================================================================
+# ÉNUMÉRATIONS POUR PAYS ET TIMEZONES
+# =============================================================================
+
+
+class Country(IntEnum):
+    """Énumération des pays avec leurs codes numériques investing.com"""
+    UNITED_KINGDOM = 4  # United Kingdom
+    UNITED_STATES = 5  # United States
+    CANADA = 6  # Canada
+    MEXICO = 7  # Mexico
+    BERMUDA = 8  # Bermuda
+    SWEDEN = 9  # Sweden
+    ITALY = 10  # Italy
+    SOUTH_KOREA = 11  # South Korea
+    SWITZERLAND = 12  # Switzerland
+    INDIA = 14  # India
+    COSTA_RICA = 15  # Costa Rica
+    GERMANY = 17  # Germany
+    NIGERIA = 20  # Nigeria
+    NETHERLANDS = 21  # Netherlands
+    FRANCE = 22  # France
+    ISRAEL = 23  # Israel
+    DENMARK = 24  # Denmark
+    AUSTRALIA = 25  # Australia
+    SPAIN = 26  # Spain
+    CHILE = 27  # Chile
+    ARGENTINA = 29  # Argentina
+    BRAZIL = 32  # Brazil
+    IRELAND = 33  # Ireland
+    BELGIUM = 34  # Belgium
+    JAPAN = 35  # Japan
+    SINGAPORE = 36  # Singapore
+    CHINA = 37  # China
+    PORTUGAL = 38  # Portugal
+    HONG_KONG = 39  # Hong Kong
+    THAILAND = 41  # Thailand
+    MALAYSIA = 42  # Malaysia
+    NEW_ZEALAND = 43  # New Zealand
+    PAKISTAN = 44  # Pakistan
+    PHILIPPINES = 45  # Philippines
+    TAIWAN = 46  # Taiwan
+    BANGLADESH = 47  # Bangladesh
+    INDONESIA = 48  # Indonesia
+    GREECE = 51  # Greece
+    SAUDI_ARABIA = 52  # Saudi Arabia
+    POLAND = 53  # Poland
+    AUSTRIA = 54  # Austria
+    CZECH_REPUBLIC = 55  # Czech Republic
+    RUSSIA = 56  # Russia
+    KENYA = 57  # Kenya
+    EGYPT = 59  # Egypt
+    NORWAY = 60  # Norway
+    UKRAINE = 61  # Ukraine
+    TURKIYE = 63  # Türkiye
+    IRAQ = 66  # Iraq
+    LEBANON = 68  # Lebanon
+    BULGARIA = 70  # Bulgaria
+    FINLAND = 71  # Finland
+    EURO_ZONE = 72  # Euro Zone
+    GHANA = 74  # Ghana
+    ZIMBABWE = 75  # Zimbabwe
+    COTE_DIVOIRE = 78  # Cote D'Ivoire
+    RWANDA = 80  # Rwanda
+    MOZAMBIQUE = 82  # Mozambique
+    ZAMBIA = 84  # Zambia
+    TANZANIA = 85  # Tanzania
+    ANGOLA = 86  # Angola
+    OMAN = 87  # Oman
+    ESTONIA = 89  # Estonia
+    SLOVAKIA = 90  # Slovakia
+    JORDAN = 92  # Jordan
+    HUNGARY = 93  # Hungary
+    KUWAIT = 94  # Kuwait
+    ALBANIA = 95  # Albania
+    LITHUANIA = 96  # Lithuania
+    LATVIA = 97  # Latvia
+    ROMANIA = 100  # Romania
+    KAZAKHSTAN = 102  # Kazakhstan
+    LUXEMBOURG = 103  # Luxembourg
+    MOROCCO = 105  # Morocco
+    ICELAND = 106  # Iceland
+    CYPRUS = 107  # Cyprus
+    MALTA = 109  # Malta
+    SOUTH_AFRICA = 110  # South Africa
+    MALAWI = 111  # Malawi
+    SLOVENIA = 112  # Slovenia
+    CROATIA = 113  # Croatia
+    AZERBAIJAN = 114  # Azerbaijan
+    JAMAICA = 119  # Jamaica
+    ECUADOR = 121  # Ecuador
+    COLOMBIA = 122  # Colombia
+    UGANDA = 123  # Uganda
+    PERU = 125  # Peru
+    VENEZUELA = 138  # Venezuela
+    MONGOLIA = 139  # Mongolia
+    UNITED_ARAB_EMIRATES = 143  # United Arab Emirates
+    BAHRAIN = 145  # Bahrain
+    PARAGUAY = 148  # Paraguay
+    SRI_LANKA = 162  # Sri Lanka
+    BOTSWANA = 163  # Botswana
+    UZBEKISTAN = 168  # Uzbekistan
+    QATAR = 170  # Qatar
+    NAMIBIA = 172  # Namibia
+    BOSNIA_HERZEGOVINA = 174  # Bosnia-Herzegovina
+    VIETNAM = 178  # Vietnam
+    URUGUAY = 180  # Uruguay
+    MAURITIUS = 188  # Mauritius
+    PALESTINIAN_TERRITORY = 193  # Palestinian Territory
+    TUNISIA = 202  # Tunisia
+    KYRGYZSTAN = 204  # Kyrgyzstan
+    CAYMAN_ISLANDS = 232  # Cayman Islands
+    SERBIA = 238  # Serbia
+    MONTENEGRO = 247  # Montenegro
+
+    @classmethod
+    def get_by_code(cls, code: int) -> Optional['Country']:
+        """Retourne le Country correspondant au code, ou None si introuvable"""
+        try:
+            return cls(code)
+        except ValueError:
+            return None
+
+    @classmethod
+    def get_by_name(cls, name: str) -> Optional['Country']:
+        """Retourne le Country correspondant au nom (case-insensitive), ou None si introuvable"""
+        name_lower = name.lower().strip()
+        # Mapping des noms vers les codes
+        _name_map = {
+            4: 'United Kingdom',
+            5: 'United States',
+            6: 'Canada',
+            7: 'Mexico',
+            8: 'Bermuda',
+            9: 'Sweden',
+            10: 'Italy',
+            11: 'South Korea',
+            12: 'Switzerland',
+            14: 'India',
+            15: 'Costa Rica',
+            17: 'Germany',
+            20: 'Nigeria',
+            21: 'Netherlands',
+            22: 'France',
+            23: 'Israel',
+            24: 'Denmark',
+            25: 'Australia',
+            26: 'Spain',
+            27: 'Chile',
+            29: 'Argentina',
+            32: 'Brazil',
+            33: 'Ireland',
+            34: 'Belgium',
+            35: 'Japan',
+            36: 'Singapore',
+            37: 'China',
+            38: 'Portugal',
+            39: 'Hong Kong',
+            41: 'Thailand',
+            42: 'Malaysia',
+            43: 'New Zealand',
+            44: 'Pakistan',
+            45: 'Philippines',
+            46: 'Taiwan',
+            47: 'Bangladesh',
+            48: 'Indonesia',
+            51: 'Greece',
+            52: 'Saudi Arabia',
+            53: 'Poland',
+            54: 'Austria',
+            55: 'Czech Republic',
+            56: 'Russia',
+            57: 'Kenya',
+            59: 'Egypt',
+            60: 'Norway',
+            61: 'Ukraine',
+            63: 'Türkiye',
+            66: 'Iraq',
+            68: 'Lebanon',
+            70: 'Bulgaria',
+            71: 'Finland',
+            72: 'Euro Zone',
+            74: 'Ghana',
+            75: 'Zimbabwe',
+            78: "Cote D'Ivoire",
+            80: 'Rwanda',
+            82: 'Mozambique',
+            84: 'Zambia',
+            85: 'Tanzania',
+            86: 'Angola',
+            87: 'Oman',
+            89: 'Estonia',
+            90: 'Slovakia',
+            92: 'Jordan',
+            93: 'Hungary',
+            94: 'Kuwait',
+            95: 'Albania',
+            96: 'Lithuania',
+            97: 'Latvia',
+            100: 'Romania',
+            102: 'Kazakhstan',
+            103: 'Luxembourg',
+            105: 'Morocco',
+            106: 'Iceland',
+            107: 'Cyprus',
+            109: 'Malta',
+            110: 'South Africa',
+            111: 'Malawi',
+            112: 'Slovenia',
+            113: 'Croatia',
+            114: 'Azerbaijan',
+            119: 'Jamaica',
+            121: 'Ecuador',
+            122: 'Colombia',
+            123: 'Uganda',
+            125: 'Peru',
+            138: 'Venezuela',
+            139: 'Mongolia',
+            143: 'United Arab Emirates',
+            145: 'Bahrain',
+            148: 'Paraguay',
+            162: 'Sri Lanka',
+            163: 'Botswana',
+            168: 'Uzbekistan',
+            170: 'Qatar',
+            172: 'Namibia',
+            174: 'Bosnia-Herzegovina',
+            178: 'Vietnam',
+            180: 'Uruguay',
+            188: 'Mauritius',
+            193: 'Palestinian Territory',
+            202: 'Tunisia',
+            204: 'Kyrgyzstan',
+            232: 'Cayman Islands',
+            238: 'Serbia',
+            247: 'Montenegro',
+        }
+        # Recherche exacte (case-insensitive)
+        for code, country_name in _name_map.items():
+            if country_name.lower() == name_lower:
+                return cls(code)
+        # Recherche par nom normalisé (sans underscores)
+        name_normalized = name_lower.replace(' ', '_').replace('-', '_')
+        for country in cls:
+            if country.name.lower() == name_normalized:
+                return country
+        return None
+
+
+class Timezone(IntEnum):
+    """Énumération des fuseaux horaires avec leurs IDs investing.com"""
+    GMT_1200_ENIWETOK_KWAJALEIN = 1  # (GMT +12:00) Eniwetok, Kwajalein
+    GMT_1100_MIDWAY_ISLAND = 2  # (GMT -11:00) Midway Island
+    GMT_1000_HAWAII = 3  # (GMT -10:00) Hawaii
+    GMT_900_ALASKA = 4  # (GMT -9:00) Alaska
+    GMT_800_PACIFIC_TIME_US_CANADA = 5  # (GMT -8:00) Pacific Time (US & Canada)
+    GMT_700_MOUNTAIN_TIME_US_CANADA = 6  # (GMT -7:00) Mountain Time (US & Canada)
+    GMT_600_CENTRAL_TIME_US_CANADA = 7  # (GMT -6:00) Central Time (US & Canada)
+    GMT_500_EASTERN_TIME_US_CANADA = 8  # (GMT -5:00) Eastern Time (US & Canada)
+    GMT_400_CARACAS = 9  # (GMT -4:00) Caracas
+    GMT_400_ATLANTIC_TIME_CANADA = 10  # (GMT -4:00) Atlantic Time (Canada)
+    GMT_330_NEWFOUNDLAND = 11  # (GMT -3:30) Newfoundland
+    GMT_300_BRASILIA = 12  # (GMT -3:00) Brasilia
+    GMT_100_AZORES = 14  # (GMT -1:00) Azores
+    GMT_DUBLIN_EDINBURGH_LISBON_LONDON = 15  # (GMT) Dublin, Edinburgh, Lisbon, London
+    GMT_100_AMSTERDAM_BERLIN_BERN_ROME_STOCKHOLM_VIENNA = 16  # (GMT +1:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna
+    GMT_200_JERUSALEM = 17  # (GMT +2:00) Jerusalem
+    GMT_300_MOSCOW_ST_PETERSBURG_VOLGOGRAD = 18  # (GMT +3:00) Moscow, St. Petersburg, Volgograd
+    GMT_330_TEHRAN = 19  # (GMT +3:30) Tehran
+    GMT_400_ABU_DHABI_DUBAI_MUSCAT = 20  # (GMT +4:00) Abu Dhabi, Dubai, Muscat
+    GMT_430_KABUL = 21  # (GMT +4:30) Kabul
+    GMT_500_EKATERINBURG = 22  # (GMT +5:00) Ekaterinburg
+    GMT_530_CHENNAI_KOLKATA_MUMBAI_NEW_DELHI = 23  # (GMT +5:30) Chennai, Kolkata, Mumbai, New Delhi
+    GMT_545_KATHMANDU = 24  # (GMT +5:45) Kathmandu
+    GMT_600_DHAKA = 25  # (GMT +6:00) Dhaka
+    GMT_630_YANGON_RANGOON = 26  # (GMT +6:30) Yangon (Rangoon)
+    GMT_700_BANGKOK_HANOI_JAKARTA = 27  # (GMT +7:00) Bangkok, Hanoi, Jakarta
+    GMT_800_BEIJING_CHONGQING_HONG_KONG_URUMQI = 28  # (GMT +8:00) Beijing, Chongqing, Hong Kong, Urumqi
+    GMT_900_OSAKA_SAPPORO_TOKYO = 29  # (GMT +9:00) Osaka, Sapporo, Tokyo
+    GMT_1030_ADELAIDE = 30  # (GMT +10:30) Adelaide
+    GMT_1100_CANBERRA_MELBOURNE_SYDNEY = 31  # (GMT +11:00) Canberra, Melbourne, Sydney
+    GMT_1100_SOLOMON_IS_NEW_CALEDONIA = 32  # (GMT +11:00) Solomon Is., New Caledonia
+    GMT_1300_AUCKLAND_WELLINGTON = 33  # (GMT +13:00) Auckland, Wellington
+    GMT_1100_SAMOA = 35  # (GMT -11:00) Samoa
+    GMT_800_BAJA_CALIFORNIA = 36  # (GMT -8:00) Baja California
+    GMT_700_ARIZONA = 37  # (GMT -7:00) Arizona
+    GMT_600_CHIHUAHUA_LA_PAZ_MAZATLAN = 38  # (GMT -6:00) Chihuahua, La Paz, Mazatlan
+    GMT_600_CENTRAL_AMERICA = 39  # (GMT -6:00) Central America
+    GMT_600_GUADALAJARA_MEXICO_CITY_MONTERREY = 40  # (GMT -6:00) Guadalajara, Mexico City, Monterrey
+    GMT_600_SASKATCHEWAN = 41  # (GMT -6:00) Saskatchewan
+    GMT_500_BOGOTA_LIMA_QUITO = 42  # (GMT -5:00) Bogota, Lima, Quito
+    GMT_500_INDIANA_EAST = 43  # (GMT -5:00) Indiana (East)
+    GMT_300_ASUNCION = 44  # (GMT -3:00) Asuncion
+    GMT_400_CUIABA = 45  # (GMT -4:00) Cuiaba
+    GMT_400_GEORGETOWN_LA_PAZ_MANAUS_SAN_JUAN = 46  # (GMT -4:00) Georgetown, La Paz, Manaus, San Juan
+    GMT_300_SANTIAGO = 47  # (GMT -3:00) Santiago
+    GMT_300_BUENOS_AIRES = 48  # (GMT -3:00) Buenos Aires
+    GMT_300_CAYENNE_FORTALEZA = 49  # (GMT -3:00) Cayenne, Fortaleza
+    GMT_300_GREENLAND = 50  # (GMT -3:00) Greenland
+    GMT_300_MONTEVIDEO = 51  # (GMT -3:00) Montevideo
+    GMT_100_CAPE_VERDE_IS = 53  # (GMT -1:00) Cape Verde Is.
+    GMT_100_CASABLANCA = 54  # (GMT +1:00) Casablanca
+    GMT_COORDINATED_UNIVERSAL_TIME = 55  # (GMT) Coordinated Universal Time
+    GMT_MONROVIA_REYKJAVIK = 56  # (GMT) Monrovia, Reykjavik
+    GMT_100_BELGRADE_BRATISLAVA_BUDAPEST_LJUBLJANA_PRAGUE = 57  # (GMT +1:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague
+    GMT_100_BRUSSELS_COPENHAGEN_MADRID_PARIS = 58  # (GMT +1:00) Brussels, Copenhagen, Madrid, Paris
+    GMT_100_SARAJEVO_SKOPJE_WARSAW_ZAGREB = 59  # (GMT +1:00) Sarajevo, Skopje, Warsaw, Zagreb
+    GMT_100_WEST_CENTRAL_AFRICA = 60  # (GMT +1:00) West Central Africa
+    GMT_200_WINDHOEK = 61  # (GMT +2:00) Windhoek
+    GMT_200_AMMAN = 62  # (GMT +2:00) Amman
+    GMT_300_ISTANBUL = 63  # (GMT +3:00) Istanbul
+    GMT_200_BEIRUT = 64  # (GMT +2:00) Beirut
+    GMT_200_CAIRO = 65  # (GMT +2:00) Cairo
+    GMT_200_DAMASCUS = 66  # (GMT +2:00) Damascus
+    GMT_0200_JOHANNESBURG = 67  # (GMT +02:00) Johannesburg
+    GMT_200_HELSINKI_KYIV_RIGA_SOFIA_TALLINN_VILNIUS = 68  # (GMT +2:00) Helsinki, Kyiv, Riga, Sofia, Tallinn, Vilnius
+    GMT_300_KUWAIT_RIYADH = 70  # (GMT +3:00) Kuwait, Riyadh
+    GMT_300_BAGHDAD = 71  # (GMT +3:00) Baghdad
+    GMT_300_NAIROBI = 72  # (GMT +3:00) Nairobi
+    GMT_400_BAKU = 73  # (GMT +4:00) Baku
+    GMT_500_KARACHI = 77  # (GMT +5:00) Karachi
+    GMT_530_COLOMBO = 79  # (GMT +5:30) Colombo
+    GMT_900_SEOUL = 88  # (GMT +9:00) Seoul
+    GMT_1000_BRISBANE = 91  # (GMT +10:00) Brisbane
+    GMT_1000_VLADIVOSTOK = 94  # (GMT +10:00) Vladivostok
+    GMT_800_SINGAPORE = 113  # (GMT +8:00) Singapore
+    GMT_100_LAGOS = 166  # (GMT +1:00) Lagos
+    GMT_0800_MANILA = 178  # (GMT +08:00) Manila
+
+    @classmethod
+    def get_by_code(cls, code: int) -> Optional['Timezone']:
+        """Retourne le Timezone correspondant au code, ou None si introuvable"""
+        try:
+            return cls(code)
+        except ValueError:
+            return None
+
+    @classmethod
+    def get_by_name(cls, name: str) -> Optional['Timezone']:
+        """Retourne le Timezone correspondant au nom (case-insensitive), ou None si introuvable"""
+        name_lower = name.lower().strip()
+        # Mapping des noms vers les codes
+        _name_map = {
+            1: '(GMT +12:00) Eniwetok, Kwajalein',
+            2: '(GMT -11:00) Midway Island',
+            3: '(GMT -10:00) Hawaii',
+            4: '(GMT -9:00) Alaska',
+            5: '(GMT -8:00) Pacific Time (US & Canada)',
+            6: '(GMT -7:00) Mountain Time (US & Canada)',
+            7: '(GMT -6:00) Central Time (US & Canada)',
+            8: '(GMT -5:00) Eastern Time (US & Canada)',
+            9: '(GMT -4:00) Caracas',
+            10: '(GMT -4:00) Atlantic Time (Canada)',
+            11: '(GMT -3:30) Newfoundland',
+            12: '(GMT -3:00) Brasilia',
+            14: '(GMT -1:00) Azores',
+            15: '(GMT) Dublin, Edinburgh, Lisbon, London',
+            16: '(GMT +1:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna',
+            17: '(GMT +2:00) Jerusalem',
+            18: '(GMT +3:00) Moscow, St. Petersburg, Volgograd',
+            19: '(GMT +3:30) Tehran',
+            20: '(GMT +4:00) Abu Dhabi, Dubai, Muscat',
+            21: '(GMT +4:30) Kabul',
+            22: '(GMT +5:00) Ekaterinburg',
+            23: '(GMT +5:30) Chennai, Kolkata, Mumbai, New Delhi',
+            24: '(GMT +5:45) Kathmandu',
+            25: '(GMT +6:00) Dhaka',
+            26: '(GMT +6:30) Yangon (Rangoon)',
+            27: '(GMT +7:00) Bangkok, Hanoi, Jakarta',
+            28: '(GMT +8:00) Beijing, Chongqing, Hong Kong, Urumqi',
+            29: '(GMT +9:00) Osaka, Sapporo, Tokyo',
+            30: '(GMT +10:30) Adelaide',
+            31: '(GMT +11:00) Canberra, Melbourne, Sydney',
+            32: '(GMT +11:00) Solomon Is., New Caledonia',
+            33: '(GMT +13:00) Auckland, Wellington',
+            35: '(GMT -11:00) Samoa',
+            36: '(GMT -8:00) Baja California',
+            37: '(GMT -7:00) Arizona',
+            38: '(GMT -6:00) Chihuahua, La Paz, Mazatlan',
+            39: '(GMT -6:00) Central America',
+            40: '(GMT -6:00) Guadalajara, Mexico City, Monterrey',
+            41: '(GMT -6:00) Saskatchewan',
+            42: '(GMT -5:00) Bogota, Lima, Quito',
+            43: '(GMT -5:00) Indiana (East)',
+            44: '(GMT -3:00) Asuncion',
+            45: '(GMT -4:00) Cuiaba',
+            46: '(GMT -4:00) Georgetown, La Paz, Manaus, San Juan',
+            47: '(GMT -3:00) Santiago',
+            48: '(GMT -3:00) Buenos Aires',
+            49: '(GMT -3:00) Cayenne, Fortaleza',
+            50: '(GMT -3:00) Greenland',
+            51: '(GMT -3:00) Montevideo',
+            53: '(GMT -1:00) Cape Verde Is.',
+            54: '(GMT +1:00) Casablanca',
+            55: '(GMT) Coordinated Universal Time',
+            56: '(GMT) Monrovia, Reykjavik',
+            57: '(GMT +1:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague',
+            58: '(GMT +1:00) Brussels, Copenhagen, Madrid, Paris',
+            59: '(GMT +1:00) Sarajevo, Skopje, Warsaw, Zagreb',
+            60: '(GMT +1:00) West Central Africa',
+            61: '(GMT +2:00) Windhoek',
+            62: '(GMT +2:00) Amman',
+            63: '(GMT +3:00) Istanbul',
+            64: '(GMT +2:00) Beirut',
+            65: '(GMT +2:00) Cairo',
+            66: '(GMT +2:00) Damascus',
+            67: '(GMT +02:00) Johannesburg',
+            68: '(GMT +2:00) Helsinki, Kyiv, Riga, Sofia, Tallinn, Vilnius',
+            70: '(GMT +3:00) Kuwait, Riyadh',
+            71: '(GMT +3:00) Baghdad',
+            72: '(GMT +3:00) Nairobi',
+            73: '(GMT +4:00) Baku',
+            77: '(GMT +5:00) Karachi',
+            79: '(GMT +5:30) Colombo',
+            88: '(GMT +9:00) Seoul',
+            91: '(GMT +10:00) Brisbane',
+            94: '(GMT +10:00) Vladivostok',
+            113: '(GMT +8:00) Singapore',
+            166: '(GMT +1:00) Lagos',
+            178: '(GMT +08:00) Manila',
+        }
+        # Recherche exacte (case-insensitive)
+        for code, timezone_name in _name_map.items():
+            if timezone_name.lower() == name_lower:
+                return cls(code)
+        # Recherche partielle dans les noms
+        for code, timezone_name in _name_map.items():
+            if name_lower in timezone_name.lower() or timezone_name.lower() in name_lower:
+                return cls(code)
+        # Recherche par nom normalisé (sans underscores)
+        name_normalized = name_lower.replace(' ', '_').replace('-', '_')
+        for timezone in cls:
+            if timezone.name.lower() == name_normalized:
+                return timezone
+        return None
 
 
 # =============================================================================
