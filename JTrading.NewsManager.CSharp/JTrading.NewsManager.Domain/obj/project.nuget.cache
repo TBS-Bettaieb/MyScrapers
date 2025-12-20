@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "dgSpecHash": "2TGDlSG74Fg=",
+  "success": true,
+  "projectFilePath": "D:\\WORK\\JTrading\\JTrading-News-Manager\\JTrading.NewsManager.CSharp\\JTrading.NewsManager.Domain\\JTrading.NewsManager.Domain.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\taieb\\.nuget\\packages\\microsoft.netcore.app.ref\\8.0.22\\microsoft.netcore.app.ref.8.0.22.nupkg.sha512",
+    "C:\\Users\\taieb\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\8.0.22\\microsoft.windowsdesktop.app.ref.8.0.22.nupkg.sha512",
+    "C:\\Users\\taieb\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\8.0.22\\microsoft.aspnetcore.app.ref.8.0.22.nupkg.sha512"
+  ],
+  "logs": []
+}

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("JTrading.NewsManager.Domain")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a01bdf3b8d39c7f464b9c6f7a0847213c9eccb10")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+79663839e235279e7690ff59232447e94d1ec121")]
 [assembly: System.Reflection.AssemblyProductAttribute("JTrading.NewsManager.Domain")]
 [assembly: System.Reflection.AssemblyTitleAttribute("JTrading.NewsManager.Domain")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

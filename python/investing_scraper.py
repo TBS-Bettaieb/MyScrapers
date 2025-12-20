@@ -1,14 +1,16 @@
 """
 Scraper spécialisé pour investing.com - Calendrier économique
-Utilise Crawl4AI avec JsonCssExtractionStrategy pour extraire les événements économiques
+Utilise httpx pour les requêtes API et Selenium uniquement pour initialiser les cookies
 """
 import asyncio
 import json
 import re
+import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
-from crawl4ai.extraction_strategy import JsonCssExtractionStrategy
+import httpx
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 
 
@@ -47,12 +49,261 @@ DAY_HEADER_SCHEMA = {
 
 
 # =============================================================================
+# CACHE DES COOKIES EN MÉMOIRE
+# =============================================================================
+
+_cookies_cache: Optional[Dict[str, Any]] = None
+_cookies_cache_timestamp: Optional[datetime] = None
+COOKIES_CACHE_DURATION = timedelta(hours=1)
+
+
+# =============================================================================
+# INITIALISATION DES COOKIES AVEC SELENIUM
+# =============================================================================
+
+def get_cookies_with_selenium() -> Dict[str, str]:
+    """
+    Ouvre investing.com avec Selenium et récupère tous les cookies
+    
+    Returns:
+        Dictionnaire des cookies au format {name: value}
+    """
+    driver = None
+    try:
+        chrome_options = Options()
+        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36')
+        
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.get('https://www.investing.com/economic-calendar/')
+        
+        # Attendre que la page se charge et que les cookies soient générés
+        driver.implicitly_wait(5)
+        time.sleep(3)  # Attendre quelques secondes supplémentaires pour les cookies dynamiques
+        
+        # Récupérer tous les cookies
+        selenium_cookies = driver.get_cookies()
+        
+        # Convertir en dictionnaire simple {name: value}
+        cookies_dict = {}
+        for cookie in selenium_cookies:
+            cookies_dict[cookie['name']] = cookie['value']
+        
+        return cookies_dict
+        
+    except Exception as e:
+        import traceback
+        print(f"❌ Erreur lors de la récupération des cookies avec Selenium: {type(e).__name__}")
+        print(f"   Message: {str(e)}")
+        print(f"   Traceback:")
+        traceback.print_exc()
+        return {}
+    finally:
+        if driver:
+            driver.quit()
+
+
+def get_cookies(cache: bool = True) -> Dict[str, str]:
+    """
+    Récupère les cookies, en utilisant le cache si disponible et valide
+    
+    Args:
+        cache: Si True, utilise le cache si disponible et non expiré
+    
+    Returns:
+        Dictionnaire des cookies au format {name: value}
+    """
+    global _cookies_cache, _cookies_cache_timestamp
+    
+    # Vérifier si le cache est valide
+    if cache and _cookies_cache is not None and _cookies_cache_timestamp is not None:
+        elapsed = datetime.now() - _cookies_cache_timestamp
+        if elapsed < COOKIES_CACHE_DURATION:
+            print("✅ Utilisation des cookies en cache")
+            return _cookies_cache
+    
+    # Récupérer de nouveaux cookies
+    print("🔐 Récupération des cookies avec Selenium...")
+    cookies = get_cookies_with_selenium()
+    
+    # Mettre en cache
+    if cache:
+        _cookies_cache = cookies
+        _cookies_cache_timestamp = datetime.now()
+    
+    return cookies
+
+
+# =============================================================================
+# REQUÊTE API AVEC HTTPX
+# =============================================================================
+
+async def make_api_request(
+    cookies: Dict[str, str],
+    date_from: str,
+    date_to: str,
+    countries: Optional[List[int]] = None,
+    categories: Optional[List[str]] = None,
+    importance: Optional[List[int]] = None,
+    timezone: int = 58,
+    time_filter: str = "timeOnly",
+    debug_mode: bool = False
+) -> Optional[Dict[str, Any]]:
+    """
+    Fait une requête POST vers l'API investing.com pour récupérer les événements économiques
+    
+    Args:
+        cookies: Dictionnaire des cookies
+        date_from: Date de début au format YYYY-MM-DD
+        date_to: Date de fin au format YYYY-MM-DD
+        countries: Liste des IDs de pays (None = tous)
+        categories: Liste des catégories (None = toutes)
+        importance: Liste des niveaux d'importance [1,2,3] (None = tous)
+        timezone: ID du fuseau horaire (58 = GMT+1)
+        time_filter: Filtre temporel ("timeRemain" ou "timeOnly")
+    
+    Returns:
+        Réponse JSON de l'API ou None en cas d'erreur
+    """
+    url = "https://www.investing.com/economic-calendar/Service/getCalendarFilteredData"
+    
+    # Liste complète des pays par défaut (tous les pays)
+    default_countries = [
+        95, 86, 29, 25, 54, 114, 145, 47, 34, 8, 174, 163, 32, 70, 6, 232, 27, 37, 122, 15,
+        78, 113, 107, 55, 24, 121, 59, 89, 72, 71, 22, 17, 74, 51, 39, 93, 106, 14, 48, 66,
+        33, 23, 10, 119, 35, 92, 102, 57, 94, 204, 97, 68, 96, 103, 111, 42, 109, 188, 7, 139,
+        247, 105, 82, 172, 21, 43, 20, 60, 87, 44, 193, 148, 125, 45, 53, 38, 170, 100, 56, 80,
+        52, 238, 36, 90, 112, 110, 11, 26, 162, 9, 12, 46, 85, 41, 202, 63, 123, 61, 143, 4, 5,
+        180, 168, 138, 178, 84, 75
+    ]
+    
+    # Liste complète des catégories par défaut
+    default_categories = [
+        "_employment", "_economicActivity", "_inflation", "_credit",
+        "_centralBanks", "_confidenceIndex", "_balance", "_Bonds"
+    ]
+    
+    # Préparer les paramètres POST
+    params = []
+    
+    # Countries
+    country_list = countries if countries is not None else default_countries
+    for country_id in country_list:
+        params.append(("country[]", str(country_id)))
+    
+    # Categories
+    category_list = categories if categories is not None else default_categories
+    for category in category_list:
+        params.append(("category[]", category))
+    
+    # Importance
+    importance_list = importance if importance is not None else [1, 2, 3]
+    for imp in importance_list:
+        params.append(("importance[]", str(imp)))
+    
+    # Autres paramètres
+    params.extend([
+        ("dateFrom", date_from),
+        ("dateTo", date_to),
+        ("timeZone", str(timezone)),
+        ("timeFilter", time_filter),
+        ("currentTab", "custom"),
+        ("limit_from", "0")
+    ])
+    
+    # Headers
+    headers = {
+        "accept": "*/*",
+        "accept-language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "content-type": "application/x-www-form-urlencoded",
+        "origin": "https://www.investing.com",
+        "referer": "https://www.investing.com/economic-calendar/",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36",
+        "x-requested-with": "XMLHttpRequest"
+    }
+    
+    try:
+        # Créer une copie des headers pour éviter toute modification
+        request_headers = dict(headers)
+
+        # Construire le header Cookie manuellement (sans encodage, les cookies sont déjà des strings)
+        cookie_parts = []
+        for name, value in cookies.items():
+            # Convertir en string et garder tel quel (les cookies de Selenium sont déjà des strings)
+            cookie_parts.append(f"{name}={str(value)}")
+
+        if cookie_parts:
+            request_headers["Cookie"] = "; ".join(cookie_parts)
+            if debug_mode:
+                print(f"🍪 Cookies ajoutés: {len(cookie_parts)} cookies")
+
+        # Créer un timeout explicite
+        timeout = httpx.Timeout(120.0, connect=30.0)
+
+        # Convertir params en dict pour httpx
+        # httpx avec AsyncClient a besoin d'un dict ou de bytes, pas d'une liste de tuples
+        from urllib.parse import urlencode
+        encoded_data = urlencode(params)
+
+        # Utiliser httpx.AsyncClient avec transport asynchrone explicite
+        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            # Faire la requête POST avec content au lieu de data
+            response = await client.post(
+                url,
+                content=encoded_data,
+                headers=request_headers
+            )
+            response.raise_for_status()
+
+            # Parser la réponse JSON (pas besoin d'await pour httpx)
+            return response.json()
+            
+    except httpx.TimeoutException as e:
+        print(f"❌ Timeout lors de la requête API: {e}")
+        print(f"   URL: {url}")
+        print(f"   Timeout: 120 secondes")
+        return None
+    except httpx.HTTPStatusError as e:
+        print(f"❌ Erreur HTTP lors de la requête API: {e.response.status_code}")
+        print(f"   URL: {url}")
+        print(f"   Raison: {e.response.reason_phrase}")
+        try:
+            error_body = e.response.text[:500]  # Premiers 500 caractères
+            print(f"   Réponse: {error_body}")
+        except:
+            pass
+        return None
+    except httpx.RequestError as e:
+        print(f"❌ Erreur de requête API: {type(e).__name__}")
+        print(f"   URL: {url}")
+        print(f"   Détails: {str(e)}")
+        if hasattr(e, 'request'):
+            print(f"   Méthode: {e.request.method if hasattr(e.request, 'method') else 'N/A'}")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"❌ Erreur de décodage JSON: {e}")
+        print(f"   Position: ligne {e.lineno}, colonne {e.colno}")
+        print(f"   Message: {e.msg}")
+        return None
+    except Exception as e:
+        import traceback
+        print(f"❌ Erreur inattendue lors de la requête API: {type(e).__name__}")
+        print(f"   Message: {str(e)}")
+        print(f"   Traceback:")
+        traceback.print_exc()
+        return None
+
+
+# =============================================================================
 # FONCTIONS DE POST-TRAITEMENT
 # =============================================================================
 
 def process_extracted_events(raw_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Post-traitement des événements extraits par JsonCssExtractionStrategy
+    Post-traitement des événements extraits
     
     Args:
         raw_events: Liste des événements bruts extraits
@@ -127,7 +378,7 @@ def process_extracted_events(raw_events: List[Dict[str, Any]]) -> List[Dict[str,
 
 def extract_events_with_strategy(html_content: str) -> List[Dict[str, Any]]:
     """
-    Extrait les événements du HTML en utilisant JsonCssExtractionStrategy
+    Extrait les événements du HTML en utilisant BeautifulSoup et le schéma d'extraction
     
     Args:
         html_content: Contenu HTML à parser
@@ -136,60 +387,64 @@ def extract_events_with_strategy(html_content: str) -> List[Dict[str, Any]]:
         Liste des événements extraits et traités
     """
     try:
-        strategy = JsonCssExtractionStrategy(ECONOMIC_EVENT_SCHEMA)
-        # Signature: extract(url, html_content)
-        extracted_data = strategy.extract("", html_content)
-        
-        if extracted_data:
-            # extract() peut retourner une liste ou une string JSON
-            if isinstance(extracted_data, str):
-                raw_events = json.loads(extracted_data)
-            else:
-                raw_events = extracted_data
-            
-            if isinstance(raw_events, list):
-                return process_extracted_events(raw_events)
-        
-        return []
-    except Exception as e:
-        print(f"Erreur lors de l'extraction avec JsonCssExtractionStrategy: {e}")
-        return []
-
-
-def _extract_holidays_fallback(html_content: str) -> List[Dict[str, Any]]:
-    """
-    Extrait les jours fériés du HTML (fallback pour les cas où il n'y a que des jours fériés)
-    
-    Args:
-        html_content: Contenu HTML à parser
-    
-    Returns:
-        Liste des jours fériés formatés
-    """
-    holidays = []
-    try:
         soup = BeautifulSoup(html_content, 'html.parser')
-        rows = soup.find_all('tr')
-        current_day = None
+        raw_events = []
         
-        for row in rows:
-            # Vérifier si c'est un en-tête de jour
-            day_header = parse_day_header(row)
-            if day_header:
-                current_day = day_header
-                continue
+        # Trouver tous les événements avec le sélecteur de base
+        event_rows = soup.select(ECONOMIC_EVENT_SCHEMA["baseSelector"])
+        
+        for row in event_rows:
+            event_data = {}
             
-            # Vérifier si c'est un jour férié
-            holiday = parse_holiday_row(row)
-            if holiday:
-                if current_day:
-                    holiday['day'] = current_day
-                holidays.append(holiday)
+            # Extraire les baseFields (attributs)
+            for field in ECONOMIC_EVENT_SCHEMA["baseFields"]:
+                attr_name = field["attribute"]
+                if attr_name in row.attrs:
+                    event_data[field["name"]] = row.attrs[attr_name]
+            
+            # Extraire les champs normaux
+            for field in ECONOMIC_EVENT_SCHEMA["fields"]:
+                selector = field.get("selector")
+                if not selector:
+                    continue
                 
+                elements = row.select(selector)
+                
+                if field["type"] == "list":
+                    # Pour les listes (comme impact_icons)
+                    event_data[field["name"]] = elements
+                elif field["type"] == "attribute":
+                    # Pour les attributs
+                    attr_name = field.get("attribute")
+                    if elements and attr_name:
+                        event_data[field["name"]] = elements[0].get(attr_name, "")
+                    else:
+                        event_data[field["name"]] = ""
+                else:
+                    # Pour le texte
+                    if elements:
+                        text = elements[0].get_text(strip=True)
+                        event_data[field["name"]] = text
+                    else:
+                        event_data[field["name"]] = ""
+            
+            raw_events.append(event_data)
+        
+        return process_extracted_events(raw_events)
+        
     except Exception as e:
-        print(f"Erreur lors de l'extraction des jours fériés: {e}")
-    
-    return holidays
+        import traceback
+        print(f"❌ Erreur lors de l'extraction avec BeautifulSoup: {type(e).__name__}")
+        print(f"   Message: {str(e)}")
+        print(f"   Taille HTML: {len(html_content)} caractères")
+        print(f"   Traceback:")
+        traceback.print_exc()
+        return []
+
+
+# =============================================================================
+# FONCTION PRINCIPALE DE SCRAPING
+# =============================================================================
 
 async def scrape_economic_calendar(
     date_from: Optional[str] = None,
@@ -200,10 +455,10 @@ async def scrape_economic_calendar(
     timezone: int = 58,
     time_filter: str = "timeOnly",
     debug_mode: bool = True,
-    keep_open_seconds: int = 0
+    use_cache: bool = True
 ) -> Dict[str, Any]:
     """
-    Scrape le calendrier économique d'investing.com via interactions de page Crawl4AI
+    Scrape le calendrier économique d'investing.com via l'API
     
     Args:
         date_from: Date de début au format YYYY-MM-DD (défaut: aujourd'hui)
@@ -214,7 +469,7 @@ async def scrape_economic_calendar(
         timezone: ID du fuseau horaire (58 = GMT+1)
         time_filter: Filtre temporel (défaut: "timeOnly")
         debug_mode: Active les logs détaillés
-        keep_open_seconds: Temps en secondes pour garder le navigateur ouvert (0 = fermer immédiatement)
+        use_cache: Utilise le cache des cookies si disponible
     
     Returns:
         Dictionnaire contenant:
@@ -233,244 +488,64 @@ async def scrape_economic_calendar(
     if importance is None:
         importance = [1, 2, 3]
     
-    # JavaScript ROBUSTE - Continue même en cas d'échec + délai inconditionnel
-    js_interact_filters = r"""
-    (async function() {
-        const logStyle = 'background: #222; color: #00ff00; padding: 5px 10px; font-size: 14px; font-weight: bold;';
-        const errorStyle = 'background: #ff0000; color: #fff; padding: 5px 10px; font-size: 14px; font-weight: bold;';
-        const successStyle = 'background: #00ff00; color: #000; padding: 5px 10px; font-size: 14px; font-weight: bold;';
-        const warningStyle = 'background: #ff9900; color: #000; padding: 5px 10px; font-size: 14px; font-weight: bold;';
-        
-        const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-        
-        const clickWithRetry = async (selector, description, maxRetries = 3) => {
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    const element = document.querySelector(selector);
-                    if (element && element.offsetParent !== null) {
-                        element.click();
-                        console.log('%c SUCCESS: ' + description, successStyle);
-                        return true;
-                    }
-                    console.log('%c RETRY ' + (i + 1) + '/' + maxRetries + ': ' + description, logStyle);
-                    await wait(500);
-                } catch (e) {
-                    console.error('%c ERROR: ' + description, errorStyle, e);
-                }
-            }
-            console.log('%c SKIPPED (not found): ' + description, warningStyle);
-            await wait(4000);
-            return false;
-        };
-        
-        const checkBox = async (selector, description) => {
-            try {
-                const element = document.querySelector(selector);
-                if (element) {
-                    if (!element.checked) {
-                        element.checked = true;
-                        element.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
-                    console.log('%c CHECKED: ' + description, successStyle);
-                    return true;
-                }
-            } catch (e) {
-                console.error('%c ERROR checkbox: ' + description, errorStyle, e);
-            }
-            return false;
-        };
-        
-        console.log('%c START INVESTING SCRIPT', 'background: #0066ff; color: #fff; padding: 10px; font-size: 16px; font-weight: bold;');
-        
-        try {
-            // STEP 0: Handle popups (non-bloquant)
-            console.log('%c STEP 0: Handling popups', logStyle);
-            await wait(2000);
-            
-            await clickWithRetry('#onetrust-accept-btn-handler', 'OneTrust Accept');
-            await wait(1500);
-            
-            await clickWithRetry('i.popupCloseIcon.largeBannerCloser', 'Banner Close');
-            await wait(1000);
-            
-            const closeSelectors = ['i.popupCloseIcon', '.popupCloseIcon'];
-            for (const selector of closeSelectors) {
-                await clickWithRetry(selector, 'Popup ' + selector);
-                await wait(500);
-            }
-            
-            await wait(1500);
-            
-            // STEP 1: Open filters
-            console.log('%c STEP 1: Opening filters', logStyle);
-            const filterOpened = await clickWithRetry('#filterStateAnchor', 'Filter Button');
-            
-            if (filterOpened) {
-                await wait(2000);
-                
-                // STEP 2: Select all countries
-                console.log('%c STEP 2: Select all countries', logStyle);
-                const allLinks = Array.from(document.querySelectorAll('a'));
-                const selectAllCountries = allLinks.find(a => 
-                    a.textContent.trim() === 'Select All' && 
-                    a.onclick && 
-                    a.onclick.toString().includes('country')
-                );
-                
-                if (selectAllCountries) {
-                    selectAllCountries.click();
-                    console.log('%c Select All Countries clicked', successStyle);
-                    await wait(800);
-                }
-                
-                // STEP 3: Select time only radio
-                console.log('%c STEP 3: Select Display time only', logStyle);
-                await clickWithRetry('#timetimeOnly', 'Radio Display time only');
-                await wait(500);
-                
-                // STEP 4: Select all categories
-                console.log('%c STEP 4: Select all categories', logStyle);
-                const selectAllCategories = allLinks.find(a => 
-                    a.textContent.trim() === 'Select All' && 
-                    a.onclick && 
-                    a.onclick.toString().includes('category')
-                );
-                
-                if (selectAllCategories) {
-                    selectAllCategories.click();
-                    console.log('%c Select All Categories clicked', successStyle);
-                    await wait(800);
-                }
-                
-                // STEP 5: Check all importance levels
-                console.log('%c STEP 5: Checking importance levels', logStyle);
-                await checkBox('#importance1', 'Importance Low');
-                await wait(300);
-                await checkBox('#importance2', 'Importance Medium');
-                await wait(300);
-                await checkBox('#importance3', 'Importance High');
-                await wait(500);
-                
-                // STEP 6: Apply filters
-                console.log('%c STEP 6: Applying filters', logStyle);
-                await clickWithRetry('#ecSubmitButton', 'Apply Button');
-                await wait(3000);
-                
-                // STEP 7: Select UTC timezone
-                console.log('%c STEP 7: Selecting UTC timezone', logStyle);
-                await clickWithRetry('#economicCurrentTimePop', 'Timezone Selector');
-                await wait(800);
-                await clickWithRetry('#liTz55', 'UTC Timezone');
-                await wait(1500);
-            } else {
-                console.log('%c WARNING: Filters not opened, continuing anyway', warningStyle);
-                await wait(4000);
-            }
-            
-            console.log('%c SCRIPT EXECUTION COMPLETED', 'background: #00ff00; color: #000; padding: 10px; font-size: 16px; font-weight: bold;');
-            
-        } catch (error) {
-            console.error('%c SCRIPT ERROR (but continuing): ', errorStyle, error);
-        }
-        
-        window.INVESTING_SCRIPT_COMPLETED = true;
-        
-        // DÉLAI INCONDITIONNEL - TOUJOURS EXÉCUTÉ
-        const keepOpenSeconds = window.KEEP_OPEN_SECONDS || 0;
-        if (keepOpenSeconds > 0) {
-            console.log('%c INSPECTION MODE: Keeping page open for ' + keepOpenSeconds + ' seconds', 'background: #ff9900; color: #000; padding: 10px; font-size: 16px; font-weight: bold;');
-            
-            let remaining = keepOpenSeconds;
-            while (remaining > 0) {
-                const nextWait = Math.min(5, remaining);
-                console.log('%c Browser will close in ' + remaining + ' seconds...', 'background: #ff9900; color: #000; padding: 5px;');
-                await wait(nextWait * 1000);
-                remaining -= nextWait;
-            }
-            
-            console.log('%c INSPECTION TIME ENDED - Closing now', 'background: #ff0000; color: #fff; padding: 10px;');
-        }
-        
-        console.log('%c SCRIPT FULLY COMPLETED - Browser will close', 'background: #0066ff; color: #fff; padding: 10px; font-size: 16px; font-weight: bold;');
-        
-    })();
-    """
-    
     try:
-        browser_config = BrowserConfig(
-            headless=False,
-            java_script_enabled=True,
-            verbose=debug_mode,
-        )
-        
-        # Injection du temps d'attente dans la page
-        js_setup = f"window.KEEP_OPEN_SECONDS = {keep_open_seconds};"
-        
-        config = CrawlerRunConfig(
-            js_code=[js_setup, js_interact_filters],
-            wait_for="js:() => window.INVESTING_SCRIPT_COMPLETED === true",
-            delay_before_return_html=15.0,
-            page_timeout=120000,
-            cache_mode=CacheMode.BYPASS,
-            extraction_strategy=JsonCssExtractionStrategy(ECONOMIC_EVENT_SCHEMA),
-            wait_until="networkidle"
-        )
-        
         print("\n" + "="*70)
         print("🚀 DÉMARRAGE DU SCRAPING")
         print("="*70)
         print(f"📅 Période: {date_from} → {date_to}")
         print(f"🌍 Timezone: {timezone}")
         print(f"⚙️  Mode debug: {debug_mode}")
-        print(f"⏱️  Keep open: {keep_open_seconds}s")
         print("="*70 + "\n")
         
-        async with AsyncWebCrawler(config=browser_config) as crawler:
-            print("🌐 Chargement de la page investing.com...")
-            print(f"⏱️  Le navigateur restera ouvert {keep_open_seconds} secondes après exécution JS")
-            print("📌 Ouvrez DevTools (F12) maintenant pour voir les logs !\n")
-            
-            result = await crawler.arun(
-                url="https://www.investing.com/economic-calendar/",
-                config=config
-            )
-            
-            print("✅ Page chargée et JS exécuté (navigateur maintenant fermé)")
-        
-        # Traitement après fermeture du crawler
-        if not result.success:
-            error_msg = result.error_message or "Erreur inconnue lors du scraping"
-            if "blocked" in error_msg.lower() or "403" in error_msg or "forbidden" in error_msg.lower():
-                error_msg = "Accès bloqué par investing.com. Vérifiez les headers et cookies."
+        # 1. Récupérer les cookies
+        cookies = get_cookies(cache=use_cache)
+        if not cookies:
             return {
                 "success": False,
                 "events": [],
                 "date_range": {"from": date_from, "to": date_to},
                 "total_events": 0,
-                "error_message": f"Erreur lors du scraping: {error_msg}"
+                "error_message": "Impossible de récupérer les cookies"
             }
         
-        # Traiter les données extraites
-        events = []
-        html_content = result.html or result.cleaned_html or ""
+        # 2. Faire la requête API
+        print("📡 Envoi de la requête API...")
+        api_response = await make_api_request(
+            cookies=cookies,
+            date_from=date_from,
+            date_to=date_to,
+            countries=countries,
+            categories=categories,
+            importance=importance,
+            timezone=timezone,
+            time_filter=time_filter,
+            debug_mode=debug_mode
+        )
+        
+        if not api_response:
+            return {
+                "success": False,
+                "events": [],
+                "date_range": {"from": date_from, "to": date_to},
+                "total_events": 0,
+                "error_message": "Erreur lors de la requête API"
+            }
+        
+        # 3. Extraire le HTML de la réponse
+        html_content = api_response.get("data", "")
+        if not html_content:
+            return {
+                "success": False,
+                "events": [],
+                "date_range": {"from": date_from, "to": date_to},
+                "total_events": 0,
+                "error_message": "Aucune donnée dans la réponse API"
+            }
         
         print(f"📄 HTML récupéré: {len(html_content)} caractères")
         
-        if result.extracted_content:
-            try:
-                extracted_data = json.loads(result.extracted_content)
-                if isinstance(extracted_data, list):
-                    events = process_extracted_events(extracted_data)
-                elif isinstance(extracted_data, dict) and "EconomicEvents" in extracted_data:
-                    events = process_extracted_events(extracted_data["EconomicEvents"])
-                print(f"✅ Événements extraits via strategy: {len(events)}")
-            except (json.JSONDecodeError, KeyError) as e:
-                print(f"⚠️  Erreur parsing extracted_content: {e}")
-                events = extract_events_with_strategy(html_content)
-                print(f"✅ Événements extraits via fallback: {len(events)}")
-        else:
-            events = extract_events_with_strategy(html_content)
-            print(f"✅ Événements extraits directement: {len(events)}")
+        # 4. Parser le HTML pour extraire les événements
+        events = extract_events_with_strategy(html_content)
         
         if not events:
             print("⚠️  Aucun événement trouvé, tentative extraction jours fériés...")
@@ -497,14 +572,6 @@ async def scrape_economic_calendar(
             "total_events": 0,
             "error_message": "Timeout: La requête a pris trop de temps"
         }
-    except ConnectionError as e:
-        return {
-            "success": False,
-            "events": [],
-            "date_range": {"from": date_from, "to": date_to},
-            "total_events": 0,
-            "error_message": f"Erreur de connexion: {str(e)}"
-        }
     except Exception as e:
         import traceback
         error_detail = traceback.format_exc()
@@ -516,6 +583,8 @@ async def scrape_economic_calendar(
             "total_events": 0,
             "error_message": f"Erreur générale: {str(e)}"
         }
+
+
 # =============================================================================
 # FONCTIONS DE PARSING POUR CAS SPÉCIAUX (jours fériés, en-têtes)
 # =============================================================================
@@ -535,7 +604,7 @@ def parse_day_header(row) -> Optional[str]:
         if day_cell:
             return extract_text(day_cell)
     except Exception as e:
-        print(f"Erreur parsing day header: {e}")
+        print(f"⚠️  Erreur parsing day header: {type(e).__name__} - {str(e)}")
     return None
 
 
@@ -579,8 +648,47 @@ def parse_holiday_row(row) -> Optional[Dict[str, Any]]:
         }
         
     except Exception as e:
-        print(f"Erreur parsing holiday: {e}")
+        print(f"⚠️  Erreur parsing holiday: {type(e).__name__} - {str(e)}")
     return None
+
+
+def _extract_holidays_fallback(html_content: str) -> List[Dict[str, Any]]:
+    """
+    Extrait les jours fériés du HTML (fallback pour les cas où il n'y a que des jours fériés)
+    
+    Args:
+        html_content: Contenu HTML à parser
+    
+    Returns:
+        Liste des jours fériés formatés
+    """
+    holidays = []
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        rows = soup.find_all('tr')
+        current_day = None
+        
+        for row in rows:
+            # Vérifier si c'est un en-tête de jour
+            day_header = parse_day_header(row)
+            if day_header:
+                current_day = day_header
+                continue
+            
+            # Vérifier si c'est un jour férié
+            holiday = parse_holiday_row(row)
+            if holiday:
+                if current_day:
+                    holiday['day'] = current_day
+                holidays.append(holiday)
+                
+    except Exception as e:
+        import traceback
+        print(f"❌ Erreur lors de l'extraction des jours fériés: {type(e).__name__}")
+        print(f"   Message: {str(e)}")
+        traceback.print_exc()
+    
+    return holidays
 
 
 def extract_text(element) -> str:
@@ -590,4 +698,3 @@ def extract_text(element) -> str:
     text = element.get_text(strip=True)
     # Remplacer les caractères non-breaking spaces
     return text.replace('\xa0', ' ')
-

@@ -1,5 +1,11 @@
 import asyncio
+import sys
 from investing_scraper import scrape_economic_calendar
+
+# Fix console encoding for Windows
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
 
 async def main():
     print("🔧 TEST DU SCRAPER INVESTING.COM")
@@ -7,7 +13,7 @@ async def main():
     
     result = await scrape_economic_calendar(
         debug_mode=True,
-        keep_open_seconds=70  # Garde ouvert 30 secondes
+        use_cache=True  # Utilise le cache des cookies si disponible
     )
     
     print("\n📊 RÉSULTATS:")
