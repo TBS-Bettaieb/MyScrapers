@@ -1,16 +1,14 @@
-# Projet Python - Scraping Web avec Crawl4AI
+# Projet Python - API Calendrier Économique Investing.com
 
-Ce projet permet de scraper des pages web en utilisant la bibliothèque [Crawl4AI](https://docs.crawl4ai.com/).
+Ce projet fournit une API REST pour scraper le calendrier économique d'[investing.com](https://www.investing.com/economic-calendar/).
 
-Il propose deux modes d'utilisation :
-
-- **Script CLI** : Utilisation en ligne de commande
-- **API REST** : Service web avec FastAPI pour intégration dans d'autres applications
+Il utilise FastAPI pour créer une API REST asynchrone qui permet de récupérer les événements économiques avec filtrage par dates, pays, catégories et importance.
 
 ## Prérequis
 
 - Python 3.8 ou supérieur
 - pip (gestionnaire de paquets Python)
+- Chrome/Chromium (pour Selenium, utilisé uniquement pour l'initialisation des cookies)
 
 ## Installation
 
@@ -42,41 +40,13 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Installer les navigateurs Playwright
+### 4. Installer ChromeDriver
 
-Crawl4AI utilise Playwright pour le scraping. Après l'installation des dépendances, vous devez installer les navigateurs :
-
-```bash
-python -m playwright install chromium
-```
-
-Ou pour installer tous les navigateurs :
-
-```bash
-python -m playwright install
-```
+Le projet utilise Selenium avec Chrome pour initialiser les cookies. Assurez-vous que ChromeDriver est installé et accessible dans votre PATH.
 
 ## Utilisation
 
-### Mode 1 : Script CLI
-
-#### Scraper une URL spécifique
-
-```bash
-python scraper.py https://www.example.com
-```
-
-#### Utiliser l'URL par défaut
-
-Si aucune URL n'est fournie, le script utilisera `https://www.example.com` par défaut :
-
-```bash
-python scraper.py
-```
-
-### Mode 2 : API REST
-
-#### Démarrer le serveur API
+### Démarrer le serveur API
 
 ```bash
 python app.py
@@ -85,66 +55,136 @@ python app.py
 Ou avec uvicorn directement :
 
 ```bash
-uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app:app --host 0.0.0.0 --port 8001 --reload
 ```
 
-Le serveur sera accessible sur `http://localhost:8000`
+Le serveur sera accessible sur `http://localhost:8001`
 
-#### Documentation interactive
+### Documentation interactive
 
 Une fois le serveur démarré, accédez à la documentation interactive :
 
-- **Swagger UI** : http://localhost:8000/docs
-- **ReDoc** : http://localhost:8000/redoc
+- **Swagger UI** : http://localhost:8001/docs
+- **ReDoc** : http://localhost:8001/redoc
 
-#### Endpoints disponibles
+## Endpoints disponibles
 
-**GET /** - Informations sur l'API
+### GET / - Informations sur l'API
+
+Retourne les informations générales sur l'API et la liste des endpoints disponibles.
 
 ```bash
-curl http://localhost:8000/
+curl http://localhost:8001/
 ```
 
-**GET /health** - Vérifier l'état de l'API
+### GET /health - Vérifier l'état de l'API
+
+Vérifie que l'API fonctionne correctement.
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8001/health
 ```
 
-**GET /scrape** - Scraper via query parameter
+### GET /scrape/investing - Scraper le calendrier économique (GET)
+
+Récupère les événements économiques via paramètres de requête.
+
+**Paramètres :**
+- `date_from` (optionnel) : Date de début au format `YYYY-MM-DD` (défaut: aujourd'hui)
+- `date_to` (optionnel) : Date de fin au format `YYYY-MM-DD` (défaut: dans 30 jours)
+- `timezone` (optionnel) : ID du fuseau horaire (défaut: 58 pour GMT+1)
+- `time_filter` (optionnel) : Filtre temporel (défaut: "timeOnly")
+
+**Exemple :**
 
 ```bash
-curl "http://localhost:8000/scrape?url=https://www.example.com"
+curl "http://localhost:8001/scrape/investing?date_from=2025-01-01&date_to=2025-01-31&timezone=58"
 ```
 
-**POST /scrape** - Scraper via body JSON
+### POST /scrape/investing - Scraper le calendrier économique (POST)
+
+Récupère les événements économiques via body JSON avec filtres avancés.
+
+**Body JSON :**
+
+```json
+{
+  "date_from": "2025-01-01",
+  "date_to": "2025-01-31",
+  "countries": [5, 6, 17],
+  "categories": ["_employment", "_inflation"],
+  "importance": [1, 2, 3],
+  "timezone": 58,
+  "time_filter": "timeOnly"
+}
+```
+
+**Paramètres :**
+- `date_from` (optionnel) : Date de début au format `YYYY-MM-DD`
+- `date_to` (optionnel) : Date de fin au format `YYYY-MM-DD`
+- `countries` (optionnel) : Liste des IDs de pays à filtrer (None = tous les pays)
+- `categories` (optionnel) : Liste des catégories à filtrer (None = toutes les catégories)
+- `importance` (optionnel) : Liste des niveaux d'importance [1,2,3] (None = tous)
+- `timezone` (optionnel) : ID du fuseau horaire (défaut: 58)
+- `time_filter` (optionnel) : Filtre temporel (défaut: "timeOnly")
+
+**Exemple :**
 
 ```bash
-curl -X POST "http://localhost:8000/scrape" \
+curl -X POST "http://localhost:8001/scrape/investing" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://www.example.com"}'
+  -d '{
+    "date_from": "2025-01-01",
+    "date_to": "2025-01-31",
+    "timezone": 58
+  }'
 ```
 
-#### Exemple de réponse
+## Format de réponse
+
+La réponse contient les événements économiques et les jours fériés :
 
 ```json
 {
   "success": true,
-  "url": "https://www.example.com",
-  "markdown": "# Example Domain\n\nThis domain is for use...",
-  "content_length": 1234,
+  "events": [
+    {
+      "time": "10:00",
+      "datetime": "2025/01/15 10:00:00",
+      "parsed_datetime": "2025-01-15T10:00:00",
+      "day": "Wednesday, January 15, 2025",
+      "country": "United States",
+      "country_code": "USD",
+      "event": "Consumer Price Index (MoM)",
+      "event_url": "/economic-calendar/consumer-price-index-core-735",
+      "actual": "0.3%",
+      "forecast": "0.2%",
+      "previous": "0.1%",
+      "impact": "High",
+      "event_id": "537228"
+    }
+  ],
+  "holidays": [
+    {
+      "type": "holiday",
+      "time": "00:00",
+      "day": "Wednesday, January 1, 2025",
+      "country": "United States",
+      "event": "New Year's Day",
+      "impact": "Holiday"
+    }
+  ],
+  "date_range": {
+    "from": "2025-01-01",
+    "to": "2025-01-31"
+  },
+  "total_events": 150,
+  "total_holidays": 3,
   "error_message": null
 }
 ```
 
 ## Fonctionnalités
-
-### Script CLI
-
-- Scraping asynchrone de pages web
-- Extraction du contenu en format Markdown
-- Gestion d'erreurs basique
-- Support des arguments en ligne de commande
 
 ### API REST
 
@@ -153,26 +193,28 @@ curl -X POST "http://localhost:8000/scrape" \
 - Documentation interactive automatique (Swagger/ReDoc)
 - Validation des données avec Pydantic
 - Gestion d'erreurs HTTP standardisée
-- Support CORS (configurable)
+- Séparation automatique des événements économiques et jours fériés
 
-## Exemple de sortie
+### Scraper Investing.com
 
-```
-Scraping de l'URL : https://www.example.com
---------------------------------------------------
+- Scraping via l'API interne d'investing.com (plus rapide que le scraping HTML)
+- Gestion automatique des cookies avec cache (1 heure)
+- Découpage automatique par périodes pour contourner les limites de l'API
+- Détection et filtrage automatique des doublons
+- Support des filtres avancés (pays, catégories, importance)
 
-=== CONTENU MARKDOWN ===
+## Architecture
 
-# Example Domain
+Le scraper utilise une stratégie de découpage par dates pour contourner les limitations de l'API investing.com :
 
-This domain is for use in illustrative examples in documents...
+1. La période demandée est divisée en chunks de 1 jour par défaut
+2. Chaque chunk est traité séparément via l'API
+3. Les résultats sont agrégés et les doublons sont filtrés
+4. Les cookies sont mis en cache pendant 1 heure pour éviter les appels Selenium répétés
 
-==================================================
+## Notes techniques
 
-✓ Scraping réussi !
-  - Longueur du contenu : 1234 caractères
-```
-
-## Documentation
-
-Pour plus d'informations sur Crawl4AI, consultez la [documentation officielle](https://docs.crawl4ai.com/).
+- Les cookies sont initialisés une seule fois avec Selenium, puis mis en cache
+- Les requêtes suivantes utilisent httpx (plus rapide) avec les cookies en cache
+- Le scraper gère automatiquement les limites de l'API en découpant les périodes
+- Les événements sont parsés depuis le HTML retourné par l'API
