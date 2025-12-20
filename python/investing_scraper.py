@@ -150,6 +150,7 @@ async def make_api_request(
     importance: Optional[List[int]] = None,
     timezone: int = 58,
     time_filter: str = "timeOnly",
+    limit_from: int = 0,
     debug_mode: bool = False
 ) -> Optional[Dict[str, Any]]:
     """
@@ -211,7 +212,7 @@ async def make_api_request(
         ("timeZone", str(timezone)),
         ("timeFilter", time_filter),
         ("currentTab", "custom"),
-        ("limit_from", "0")
+        ("limit_from", str(limit_from))
     ])
     
     # Headers
@@ -455,11 +456,13 @@ async def scrape_economic_calendar(
     timezone: int = 58,
     time_filter: str = "timeOnly",
     debug_mode: bool = True,
-    use_cache: bool = True
+    use_cache: bool = True,
+    max_events: Optional[int] = None,
+    page_size: int = 200
 ) -> Dict[str, Any]:
     """
-    Scrape le calendrier économique d'investing.com via l'API
-    
+    Scrape le calendrier économique d'investing.com via l'API avec pagination automatique
+
     Args:
         date_from: Date de début au format YYYY-MM-DD (défaut: aujourd'hui)
         date_to: Date de fin au format YYYY-MM-DD (défaut: dans 30 jours)
@@ -470,13 +473,16 @@ async def scrape_economic_calendar(
         time_filter: Filtre temporel (défaut: "timeOnly")
         debug_mode: Active les logs détaillés
         use_cache: Utilise le cache des cookies si disponible
-    
+        max_events: Nombre maximum d'événements à récupérer (None = tous)
+        page_size: Taille de chaque page (défaut: 200)
+
     Returns:
         Dictionnaire contenant:
         - success: bool
         - events: Liste des événements économiques
         - date_range: {"from": str, "to": str}
         - total_events: int
+        - total_pages: int
         - error_message: Optional[str]
     """
     # Définir les dates par défaut
@@ -505,62 +511,123 @@ async def scrape_economic_calendar(
                 "events": [],
                 "date_range": {"from": date_from, "to": date_to},
                 "total_events": 0,
+                "total_pages": 0,
                 "error_message": "Impossible de récupérer les cookies"
             }
-        
-        # 2. Faire la requête API
-        print("📡 Envoi de la requête API...")
-        api_response = await make_api_request(
-            cookies=cookies,
-            date_from=date_from,
-            date_to=date_to,
-            countries=countries,
-            categories=categories,
-            importance=importance,
-            timezone=timezone,
-            time_filter=time_filter,
-            debug_mode=debug_mode
-        )
-        
-        if not api_response:
-            return {
-                "success": False,
-                "events": [],
-                "date_range": {"from": date_from, "to": date_to},
-                "total_events": 0,
-                "error_message": "Erreur lors de la requête API"
-            }
-        
-        # 3. Extraire le HTML de la réponse
-        html_content = api_response.get("data", "")
-        if not html_content:
-            return {
-                "success": False,
-                "events": [],
-                "date_range": {"from": date_from, "to": date_to},
-                "total_events": 0,
-                "error_message": "Aucune donnée dans la réponse API"
-            }
-        
-        print(f"📄 HTML récupéré: {len(html_content)} caractères")
-        
-        # 4. Parser le HTML pour extraire les événements
-        events = extract_events_with_strategy(html_content)
-        
-        if not events:
-            print("⚠️  Aucun événement trouvé, tentative extraction jours fériés...")
-            events = _extract_holidays_fallback(html_content)
-            print(f"✅ Jours fériés extraits: {len(events)}")
-        
+
+        # 2. Pagination: Récupérer tous les événements
+        all_events = []
+        offset = 0
+        page_num = 0
+        has_more_data = True
+        previous_html_hash = None
+        same_html_count = 0
+
+        while has_more_data:
+            page_num += 1
+
+            # Vérifier si on a atteint la limite max_events
+            if max_events is not None and len(all_events) >= max_events:
+                print(f"⚠️  Limite max_events atteinte ({max_events})")
+                break
+
+            # Protection contre les boucles infinies (max 1000 pages)
+            if page_num > 1000:
+                print(f"⚠️  Limite de 1000 pages atteinte, arrêt de la pagination")
+                break
+
+            print(f"📡 Page {page_num}: Requête API (offset={offset})...")
+
+            api_response = await make_api_request(
+                cookies=cookies,
+                date_from=date_from,
+                date_to=date_to,
+                countries=countries,
+                categories=categories,
+                importance=importance,
+                timezone=timezone,
+                time_filter=time_filter,
+                limit_from=offset,
+                debug_mode=debug_mode
+            )
+
+            if not api_response:
+                if page_num == 1:
+                    # Première page échouée = erreur critique
+                    return {
+                        "success": False,
+                        "events": [],
+                        "date_range": {"from": date_from, "to": date_to},
+                        "total_events": 0,
+                        "total_pages": 0,
+                        "error_message": "Erreur lors de la requête API"
+                    }
+                else:
+                    # Pages suivantes échouées = on arrête mais on garde les données
+                    print(f"⚠️  Erreur à la page {page_num}, arrêt de la pagination")
+                    break
+
+            # Extraire le HTML de la réponse
+            html_content = api_response.get("data", "")
+            if not html_content:
+                print(f"⚠️  Pas de données à la page {page_num}")
+                break
+
+            print(f"   📄 HTML: {len(html_content)} caractères")
+
+            # Détection de boucle: vérifier si le HTML est identique à la page précédente
+            import hashlib
+            current_html_hash = hashlib.md5(html_content.encode()).hexdigest()
+            if previous_html_hash == current_html_hash:
+                same_html_count += 1
+                if same_html_count >= 3:
+                    print(f"   🏁 Détection de boucle: même HTML pendant {same_html_count} pages consécutives")
+                    has_more_data = False
+                    break
+            else:
+                same_html_count = 0
+            previous_html_hash = current_html_hash
+
+            # Parser le HTML pour extraire les événements économiques
+            page_events = extract_events_with_strategy(html_content)
+
+            # Extraire aussi les jours fériés
+            holidays = _extract_holidays_fallback(html_content)
+
+            # Combiner les deux
+            combined_events = page_events + holidays
+
+            if not combined_events:
+                print(f"   ✅ Page {page_num}: 0 événements (fin de pagination)")
+                has_more_data = False
+                break
+
+            page_events = combined_events
+
+            print(f"   ✅ Page {page_num}: {len(page_events)} événements extraits")
+            all_events.extend(page_events)
+
+            # Vérifier s'il y a plus de données
+            rows_num = api_response.get("rows_num", 0)
+            bind_scroll_handler = api_response.get("bind_scroll_handler", False)
+
+            if rows_num < page_size or not bind_scroll_handler:
+                print(f"   🏁 Fin de pagination (rows_num={rows_num}, bind_scroll_handler={bind_scroll_handler})")
+                has_more_data = False
+            else:
+                # Continuer à la page suivante
+                offset += page_size
+
         print("\n" + "="*70)
-        print(f"✅ SCRAPING TERMINÉ - {len(events)} événements extraits")
+        print(f"✅ SCRAPING TERMINÉ - {len(all_events)} événements extraits sur {page_num} page(s)")
         print("="*70 + "\n")
-        
+
         return {
             "success": True,
-            "events": events,
+            "events": all_events,
             "date_range": {"from": date_from, "to": date_to},
-            "total_events": len(events),
+            "total_events": len(all_events),
+            "total_pages": page_num,
             "error_message": None
         }
                 
@@ -570,6 +637,7 @@ async def scrape_economic_calendar(
             "events": [],
             "date_range": {"from": date_from, "to": date_to},
             "total_events": 0,
+            "total_pages": 0,
             "error_message": "Timeout: La requête a pris trop de temps"
         }
     except Exception as e:
@@ -581,6 +649,7 @@ async def scrape_economic_calendar(
             "events": [],
             "date_range": {"from": date_from, "to": date_to},
             "total_events": 0,
+            "total_pages": 0,
             "error_message": f"Erreur générale: {str(e)}"
         }
 
