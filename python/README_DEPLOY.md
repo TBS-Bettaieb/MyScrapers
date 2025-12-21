@@ -1,73 +1,69 @@
 # Déploiement - Investing Calendar API
 
-Déploiement simple avec Git + Traefik.
+Déploiement avec Git + Docker Compose + Traefik.
 
-## 🚀 Déploiement Rapide
+## 🚀 Architecture de Déploiement
 
-### Sur le serveur VPS :
+L'API est déployée sur le serveur VPS via le fichier Docker Compose principal dans `/root/docker-compose.yml` qui contient :
+- **Traefik** : Reverse proxy avec SSL automatique (Let's Encrypt)
+- **n8n** : Automation workflow
+- **investing-api** : Cette API
+
+## 📍 URLs de Production
+
+L'API est accessible publiquement via HTTPS :
+
+- **API** : https://investing-api.srv842470.hstgr.cloud
+- **Health Check** : https://investing-api.srv842470.hstgr.cloud/health
+- **Documentation Swagger** : https://investing-api.srv842470.hstgr.cloud/docs
+- **ReDoc** : https://investing-api.srv842470.hstgr.cloud/redoc
+
+## 🔄 Mise à Jour du Code
 
 ```bash
-# 1. Cloner
-cd /opt
+# Sur le serveur
+ssh root@31.97.53.244
+cd /root/investing-com-scraper/JTrading-News-Manager/python
+git pull
+cd /root
+docker-compose up -d --build investing-api
+```
+
+## 🔧 Commandes Utiles
+
+```bash
+# Voir les logs
+docker logs investing-calendar-api -f
+
+# Redémarrer l'API
+cd /root && docker-compose restart investing-api
+
+# Voir l'état des services
+cd /root && docker-compose ps
+
+# Rebuild complet
+cd /root && docker-compose up -d --build investing-api
+```
+
+## 💻 Développement Local
+
+Pour tester localement :
+
+```bash
+# Cloner le repo
 git clone https://github.com/VOTRE_USER/JTrading-News-Manager.git
 cd JTrading-News-Manager/python
 
-# 2. Configurer
-cp .env.example .env
-nano .env  # Modifier DOMAIN
+# Lancer avec Docker Compose
+docker-compose up --build
 
-# 3. Déployer
-chmod +x deploy.sh
-./deploy.sh
+# Ou lancer directement avec Python
+pip install -r requirements.txt
+python app.py
 ```
 
-**C'est tout !** L'API est en ligne.
+L'API sera accessible sur : http://localhost:8001
 
-## 🔄 Mise à Jour
+## 📖 Documentation Complète
 
-```bash
-cd /opt/JTrading-News-Manager/python
-git pull
-./deploy.sh
-```
-
-## 📁 Fichiers
-
-- **deploy.sh** - Script de déploiement
-- **docker-compose.yml** - Configuration Docker avec Traefik
-- **.env.example** - Template de configuration
-- **backup.sh** - Sauvegarde
-- **monitor.sh** - Monitoring
-- **test-api.sh** - Tests
-
-## 📖 Documentation
-
-- **QUICKSTART.md** - Guide ultra-rapide
-- **DEPLOYMENT.md** - Guide complet
-- **README.md** - Documentation de l'API
-
-## 🔧 Commandes
-
-```bash
-# Logs
-docker-compose logs -f
-
-# Redémarrer
-docker-compose restart
-
-# Arrêter
-docker-compose down
-
-# Statut
-docker-compose ps
-```
-
-## 🌐 URLs
-
-- API: `http://investing-api.votre-domaine.com`
-- Health: `http://investing-api.votre-domaine.com/health`
-- Docs: `http://investing-api.votre-domaine.com/docs`
-
----
-
-**Pour démarrer :** Voir `QUICKSTART.md`
+Voir `DEPLOYMENT.md` pour plus de détails sur la configuration.

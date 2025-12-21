@@ -592,7 +592,7 @@ async def make_api_request(
         countries: Liste des IDs de pays (None = tous)
         categories: Liste des catégories (None = toutes)
         importance: Liste des niveaux d'importance [1,2,3] (None = tous)
-        timezone: ID du fuseau horaire (58 = GMT+1)
+        timezone: ID du fuseau horaire (55 = UTC)
         time_filter: Filtre temporel ("timeRemain" ou "timeOnly")
         limit_from: Offset de pagination (0 pour la première page, 1 pour les suivantes)
         previous_event_ids: Liste des IDs d'événements déjà récupérés (pagination par curseur)
@@ -894,7 +894,7 @@ async def scrape_economic_calendar(
     countries: Optional[List[int]] = None,
     categories: Optional[List[str]] = None,
     importance: Optional[List[int]] = None,
-    timezone: int = 58,
+    timezone: int = 55,
     time_filter: str = "timeOnly",
     debug_mode: bool = True,
     use_cache: bool = True,
@@ -911,7 +911,7 @@ async def scrape_economic_calendar(
         countries: Liste des IDs de pays à filtrer (None = tous)
         categories: Liste des catégories à filtrer (None = toutes)
         importance: Liste des niveaux d'importance [1,2,3] (None = tous)
-        timezone: ID du fuseau horaire (58 = GMT+1)
+        timezone: ID du fuseau horaire (55 = UTC)
         time_filter: Filtre temporel (défaut: "timeOnly")
         debug_mode: Active les logs détaillés
         use_cache: Utilise le cache des cookies si disponible

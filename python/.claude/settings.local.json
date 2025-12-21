@@ -3,7 +3,33 @@
     "allow": [
       "Bash(chmod:*)",
       "Bash(./check-deployment-files.sh)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(ssh root@31.97.53.244 \"cd /root/investing-com-scraper/JTrading-News-Manager/python && ls -la\")",
+      "Bash(ssh root@31.97.53.244 \"cd /root/investing-com-scraper/JTrading-News-Manager/python && cat .env.example\")",
+      "Bash(ssh root@31.97.53.244 \"cd /root/investing-com-scraper/JTrading-News-Manager/python && cp .env.example .env && cat > .env << ''EOF''\n# Configuration de production\nAPP_NAME=investing-calendar-api\nAPP_VERSION=1.0.0\nENVIRONMENT=production\n\n# Configuration du serveur\nHOST=0.0.0.0\nPORT=8001\n\n# Configuration des logs\nLOG_LEVEL=INFO\n\n# Configuration du timezone par défaut\nDEFAULT_TIMEZONE=58\n\n# Configuration Uvicorn\nWORKERS=4\n\n# Domaine pour Traefik\nDOMAIN=investing-api.taieb.net\nEOF\ncat .env\")",
+      "Bash(ssh root@31.97.53.244 \"docker network ls | grep traefik\")",
+      "Bash(ssh root@31.97.53.244 \"docker inspect root_traefik_1 | grep -A 10 Networks\")",
+      "Bash(ssh root@31.97.53.244 \"cd /root/investing-com-scraper/JTrading-News-Manager/python && cat docker-compose.yml\")",
+      "Bash(ssh root@31.97.53.244 \"cd /root/investing-com-scraper/JTrading-News-Manager/python && mkdir -p logs && chmod +x deploy.sh && ./deploy.sh\")",
+      "Bash(ssh root@31.97.53.244 \"cd /root/investing-com-scraper/JTrading-News-Manager/python && docker-compose build --no-cache\")",
+      "Bash(ssh root@31.97.53.244 \"cd /root/investing-com-scraper/JTrading-News-Manager/python && docker-compose ps\")",
+      "Bash(ssh root@31.97.53.244 \"cd /root/investing-com-scraper/JTrading-News-Manager/python && docker-compose up -d 2>&1\")",
+      "Bash(ssh root@31.97.53.244 \"cd /root/investing-com-scraper/JTrading-News-Manager/python && docker-compose ps && echo ''---'' && docker-compose logs --tail=20\")",
+      "Bash(ssh root@31.97.53.244 \"curl -s http://investing-api.taieb.net/health\")",
+      "Bash(ssh root@31.97.53.244 \"curl -s http://localhost:8001/health && echo '''' && curl -s http://localhost:8001/\")",
+      "Bash(ssh root@31.97.53.244 \"docker inspect investing-calendar-api | grep -A 20 ''NetworkSettings''\")",
+      "Bash(ssh root@31.97.53.244 \"docker exec investing-calendar-api curl -s http://localhost:8001/health\")",
+      "Bash(ssh root@31.97.53.244 \"docker inspect investing-calendar-api | grep -A 2 ''traefik\\.''\")",
+      "Bash(ssh root@31.97.53.244 \"docker inspect investing-calendar-api | grep -A 15 ''Networks''\")",
+      "Bash(ssh root@31.97.53.244 \"docker logs root_traefik_1 --tail=30 2>&1 | grep -i investing\")",
+      "Bash(ssh root@31.97.53.244 \"docker exec investing-calendar-api curl -s http://localhost:8001/health && echo '''' && docker exec investing-calendar-api curl -s http://localhost:8001/\")",
+      "Bash(ssh root@31.97.53.244 \"curl -s -H ''Host: investing-api.taieb.net'' http://localhost/health\")",
+      "Bash(ssh root@31.97.53.244 \"cd /root/investing-com-scraper/JTrading-News-Manager/python && docker-compose up -d\")",
+      "Bash(ssh root@31.97.53.244 \"cd /root/investing-com-scraper/JTrading-News-Manager/python && docker-compose down && docker-compose up -d\")",
+      "Bash(ssh root@31.97.53.244 \"curl -v -H ''Host: investing-api.taieb.net'' http://localhost/health 2>&1 | head -30\")",
+      "Bash(ssh root@31.97.53.244 \"docker restart root_traefik_1 && sleep 5 && docker logs root_traefik_1 --tail=20 2>&1 | grep -i ''investing\\|Configuration loaded''\")",
+      "Bash(ssh root@31.97.53.244 \"curl -v -H ''Host: investing-api.taieb.net'' http://localhost/health 2>&1 | tail -20\")",
+      "Bash(ssh root@31.97.53.244:*)"
     ]
   }
 }

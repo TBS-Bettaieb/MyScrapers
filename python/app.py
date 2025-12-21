@@ -45,7 +45,7 @@ class InvestingScrapeRequest(BaseModel):
     countries: Optional[List[int]] = None
     categories: Optional[List[str]] = None
     importance: Optional[List[int]] = None
-    timezone: Optional[int] = 58
+    timezone: Optional[int] = 55
     time_filter: Optional[str] = "timeOnly"
 
 
@@ -95,7 +95,7 @@ async def health():
 async def scrape_investing_get(
     date_from: Optional[str] = Query(None, description="Date de début (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Date de fin (YYYY-MM-DD)"),
-    timezone: Optional[int] = Query(58, description="ID du fuseau horaire"),
+    timezone: Optional[int] = Query(55, description="ID du fuseau horaire"),
     time_filter: Optional[str] = Query("timeOnly", description="Filtre temporel")
 ):
     """
@@ -104,7 +104,7 @@ async def scrape_investing_get(
     Args:
         date_from: Date de début au format YYYY-MM-DD
         date_to: Date de fin au format YYYY-MM-DD
-        timezone: ID du fuseau horaire (défaut: 58 pour GMT+1)
+        timezone: ID du fuseau horaire (défaut: 55 pour UTC)
         time_filter: Filtre temporel (défaut: timeOnly)
     
     Returns:

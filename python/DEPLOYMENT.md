@@ -1,67 +1,67 @@
 # Guide de Déploiement
 
-Guide simple pour déployer l'API Investing Calendar sur un serveur VPS avec Traefik.
+Guide pour déployer l'API Investing Calendar sur un serveur VPS avec Docker Compose et Traefik.
 
-## Prérequis
+## 🏗️ Architecture
 
-- Serveur VPS Linux (Ubuntu/Debian)
-- Traefik déjà installé et configuré
-- Git installé sur le serveur
-- Accès SSH au serveur
+Le serveur utilise un fichier Docker Compose principal (`/root/docker-compose.yml`) qui orchestre :
+- **Traefik** : Reverse proxy avec SSL automatique via Let's Encrypt
+- **n8n** : Workflow automation
+- **investing-api** : Cette API (Investing Calendar)
 
-## Déploiement Initial
+## 📍 Configuration Actuelle
 
-### 1. Sur le serveur, cloner le repository
+- **Serveur** : root@31.97.53.244
+- **Domaine** : srv842470.hstgr.cloud
+- **URL API** : https://investing-api.srv842470.hstgr.cloud
+- **Emplacement code** : /root/investing-com-scraper/JTrading-News-Manager/python
+- **Docker Compose** : /root/docker-compose.yml
 
-```bash
-ssh user@votre-serveur
+## 🚀 Déploiement Initial
 
-cd /opt  # ou tout autre répertoire de votre choix
-git clone https://github.com/VOTRE_USER/JTrading-News-Manager.git
-cd JTrading-News-Manager/python
+Le déploiement initial a déjà été effectué. L'API est configurée dans `/root/docker-compose.yml` avec :
+
+```yaml
+investing-api:
+  build:
+    context: /root/investing-com-scraper/JTrading-News-Manager/python
+    dockerfile: Dockerfile
+  container_name: investing-calendar-api
+  restart: always
+  labels:
+    - traefik.enable=true
+    - traefik.http.routers.investing-api.rule=Host(`investing-api.${DOMAIN_NAME}`)
+    - traefik.http.routers.investing-api.tls=true
+    - traefik.http.routers.investing-api.entrypoints=web,websecure
+    - traefik.http.routers.investing-api.tls.certresolver=mytlschallenge
+    - traefik.http.services.investing-api.loadbalancer.server.port=8001
+  environment:
+    - HOST=0.0.0.0
+    - PORT=8001
+    - WORKERS=4
+    - LOG_LEVEL=INFO
+    - DEFAULT_TIMEZONE=55
+  volumes:
+    - /root/investing-com-scraper/JTrading-News-Manager/python/logs:/app/logs
 ```
 
-### 2. Configurer l'environnement
+## 🔄 Mise à Jour de l'Application
+
+Pour mettre à jour l'API après des modifications du code :
 
 ```bash
-# Copier le template de configuration
-cp .env.example .env
+# 1. Se connecter au serveur
+ssh root@31.97.53.244
 
-# Éditer la configuration
-nano .env
-```
+# 2. Aller dans le répertoire du code
+cd /root/investing-com-scraper/JTrading-News-Manager/python
 
-**Modifiez au minimum :**
-```env
-DOMAIN=investing-api.votre-domaine.com
-PORT=8001
-WORKERS=4
-```
-
-### 3. Déployer
-
-```bash
-# Rendre le script exécutable
-chmod +x deploy.sh
-
-# Lancer le déploiement
-./deploy.sh
-```
-
-**C'est tout !** L'application est déployée et accessible via Traefik.
-
-## Mise à Jour
-
-Pour mettre à jour l'application après des modifications :
-
-```bash
-cd /opt/JTrading-News-Manager/python
-
-# Récupérer les dernières modifications
+# 3. Récupérer les dernières modifications
 git pull
 
-# Redéployer
-./deploy.sh
+# 4. Rebuilder et redémarrer le service
+cd /root
+docker-compose up -d --build investing-api
 ```
 
 ## Configuration
@@ -83,63 +83,51 @@ WORKERS=4
 LOG_LEVEL=INFO
 
 # Timezone
-DEFAULT_TIMEZONE=58
+DEFAULT_TIMEZONE=55
 
 # Domaine pour Traefik
 DOMAIN=investing-api.votre-domaine.com
 ```
 
-### Configuration Traefik
+### Variables d'Environnement
 
-Le fichier `docker-compose.yml` contient les labels Traefik :
+Le fichier `.env` dans `/root/` contient la configuration globale :
 
-**HTTP (par défaut) :**
-```yaml
-- "traefik.http.routers.investing-api.rule=Host(`${DOMAIN}`)"
-- "traefik.http.routers.investing-api.entrypoints=web"
+```env
+DOMAIN_NAME=srv842470.hstgr.cloud
+SUBDOMAIN=n8n
+GENERIC_TIMEZONE=Europe/Berlin
+SSL_EMAIL=user@srv842470.hstgr.cloud
 ```
 
-**Pour activer HTTPS :**
+L'API utilise le domaine : `investing-api.${DOMAIN_NAME}` → `investing-api.srv842470.hstgr.cloud`
 
-Décommentez ces lignes dans `docker-compose.yml` :
-```yaml
-# HTTPS
-- "traefik.http.routers.investing-api-secure.rule=Host(`${DOMAIN}`)"
-- "traefik.http.routers.investing-api-secure.entrypoints=websecure"
-- "traefik.http.routers.investing-api-secure.tls=true"
-- "traefik.http.routers.investing-api-secure.tls.certresolver=letsencrypt"
+### Configuration SSL/HTTPS
 
-# Redirection HTTP vers HTTPS
-- "traefik.http.routers.investing-api.middlewares=redirect-to-https"
-- "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-```
-
-Puis redéployez :
-```bash
-./deploy.sh
-```
+Le certificat SSL est automatiquement généré et renouvelé par Let's Encrypt via Traefik :
+- **Certresolver** : mytlschallenge
+- **Méthode** : TLS Challenge
+- **Renouvellement** : Automatique
 
 ## Commandes Utiles
 
 ### Gestion de l'application
 
 ```bash
-cd /opt/JTrading-News-Manager/python
-
 # Voir les logs en temps réel
-docker-compose logs -f
+docker logs investing-calendar-api -f
+
+# Voir les dernières 100 lignes
+docker logs investing-calendar-api --tail=100
 
 # Redémarrer l'application
-docker-compose restart
+cd /root && docker-compose restart investing-api
 
-# Arrêter l'application
-docker-compose down
+# Voir l'état de tous les services
+cd /root && docker-compose ps
 
-# Démarrer l'application
-docker-compose up -d
-
-# Voir l'état des conteneurs
-docker-compose ps
+# Rebuilder après modification du code
+cd /root && docker-compose up -d --build investing-api
 
 # Voir l'utilisation des ressources
 docker stats investing-calendar-api
@@ -148,7 +136,12 @@ docker stats investing-calendar-api
 ### Gestion Git
 
 ```bash
-# Vérifier les modifications distantes
+cd /root/investing-com-scraper/JTrading-News-Manager/python
+
+# Vérifier l'état local
+git status
+
+# Voir les modifications distantes
 git fetch
 
 # Voir les différences
@@ -159,9 +152,6 @@ git pull
 
 # Voir l'historique
 git log --oneline -10
-
-# Changer de branche
-git checkout autre-branche
 ```
 
 ## Tests
@@ -169,28 +159,28 @@ git checkout autre-branche
 ### Test local (sur le serveur)
 
 ```bash
-# Health check
-curl http://localhost:8001/health
+# Health check interne
+docker exec investing-calendar-api curl -f http://localhost:8001/health
 
-# Documentation
-curl http://localhost:8001/
+# Test via localhost
+curl -H 'Host: investing-api.srv842470.hstgr.cloud' https://localhost/health
 ```
 
-### Test via Traefik (depuis n'importe où)
+### Test public (depuis n'importe où)
 
 ```bash
 # Health check
-curl http://investing-api.votre-domaine.com/health
+curl https://investing-api.srv842470.hstgr.cloud/health
 
-# Ou dans le navigateur
-http://investing-api.votre-domaine.com/docs
+# Test complet
+curl https://investing-api.srv842470.hstgr.cloud/docs
 ```
 
-### Script de test complet
+### Accès via navigateur
 
-```bash
-./test-api.sh http://investing-api.votre-domaine.com
-```
+- **Health** : https://investing-api.srv842470.hstgr.cloud/health
+- **Swagger UI** : https://investing-api.srv842470.hstgr.cloud/docs
+- **ReDoc** : https://investing-api.srv842470.hstgr.cloud/redoc
 
 ## Monitoring et Maintenance
 
@@ -292,12 +282,12 @@ sudo usermod -aG docker $USER
 
 ## URLs d'Accès
 
-Après déploiement, l'API est accessible sur :
+L'API est accessible publiquement via HTTPS :
 
-- **API** : http://investing-api.votre-domaine.com
-- **Health** : http://investing-api.votre-domaine.com/health
-- **Swagger** : http://investing-api.votre-domaine.com/docs
-- **ReDoc** : http://investing-api.votre-domaine.com/redoc
+- **API** : https://investing-api.srv842470.hstgr.cloud
+- **Health** : https://investing-api.srv842470.hstgr.cloud/health
+- **Swagger** : https://investing-api.srv842470.hstgr.cloud/docs
+- **ReDoc** : https://investing-api.srv842470.hstgr.cloud/redoc
 
 ## Structure du Projet
 
