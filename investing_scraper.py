@@ -499,10 +499,14 @@ def get_cookies_with_selenium() -> Dict[str, str]:
     driver = None
     try:
         chrome_options = Options()
-        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--headless=new')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
+        chrome_options.add_argument('--disable-software-rasterizer')
+        chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument('--disable-setuid-sandbox')
+        chrome_options.add_argument('--window-size=1920,1080')
         chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36')
         
         driver = webdriver.Chrome(options=chrome_options)
@@ -524,7 +528,7 @@ def get_cookies_with_selenium() -> Dict[str, str]:
         
     except Exception as e:
         import traceback
-        print(f"❌ Erreur lors de la récupération des cookies avec Selenium: {type(e).__name__}")
+        print(f"[ERROR] Erreur lors de la récupération des cookies avec Selenium: {type(e).__name__}")
         print(f"   Message: {str(e)}")
         print(f"   Traceback:")
         traceback.print_exc()
@@ -550,7 +554,7 @@ def get_cookies(cache: bool = True) -> Dict[str, str]:
     if cache and _cookies_cache is not None and _cookies_cache_timestamp is not None:
         elapsed = datetime.now() - _cookies_cache_timestamp
         if elapsed < COOKIES_CACHE_DURATION:
-            print("✅ Utilisation des cookies en cache")
+            print("[INFO] Utilisation des cookies en cache")
             return _cookies_cache
     
     # Récupérer de nouveaux cookies
@@ -704,12 +708,12 @@ async def make_api_request(
             return response.json()
             
     except httpx.TimeoutException as e:
-        print(f"❌ Timeout lors de la requête API: {e}")
+        print(f"[ERROR] Timeout lors de la requête API: {e}")
         print(f"   URL: {url}")
         print(f"   Timeout: 120 secondes")
         return None
     except httpx.HTTPStatusError as e:
-        print(f"❌ Erreur HTTP lors de la requête API: {e.response.status_code}")
+        print(f"[ERROR] Erreur HTTP lors de la requête API: {e.response.status_code}")
         print(f"   URL: {url}")
         print(f"   Raison: {e.response.reason_phrase}")
         try:
@@ -719,20 +723,20 @@ async def make_api_request(
             pass
         return None
     except httpx.RequestError as e:
-        print(f"❌ Erreur de requête API: {type(e).__name__}")
+        print(f"[ERROR] Erreur de requête API: {type(e).__name__}")
         print(f"   URL: {url}")
         print(f"   Détails: {str(e)}")
         if hasattr(e, 'request'):
             print(f"   Méthode: {e.request.method if hasattr(e.request, 'method') else 'N/A'}")
         return None
     except json.JSONDecodeError as e:
-        print(f"❌ Erreur de décodage JSON: {e}")
+        print(f"[ERROR] Erreur de décodage JSON: {e}")
         print(f"   Position: ligne {e.lineno}, colonne {e.colno}")
         print(f"   Message: {e.msg}")
         return None
     except Exception as e:
         import traceback
-        print(f"❌ Erreur inattendue lors de la requête API: {type(e).__name__}")
+        print(f"[ERROR] Erreur inattendue lors de la requête API: {type(e).__name__}")
         print(f"   Message: {str(e)}")
         print(f"   Traceback:")
         traceback.print_exc()
@@ -876,7 +880,7 @@ def extract_events_with_strategy(html_content: str) -> List[Dict[str, Any]]:
         
     except Exception as e:
         import traceback
-        print(f"❌ Erreur lors de l'extraction avec BeautifulSoup: {type(e).__name__}")
+        print(f"[ERROR] Erreur lors de l'extraction avec BeautifulSoup: {type(e).__name__}")
         print(f"   Message: {str(e)}")
         print(f"   Taille HTML: {len(html_content)} caractères")
         print(f"   Traceback:")
@@ -939,7 +943,7 @@ async def scrape_economic_calendar(
     
     try:
         print("\n" + "="*70)
-        print("🚀 DÉMARRAGE DU SCRAPING")
+        print("[INFO] DEMARRAGE DU SCRAPING")
         print("="*70)
         print(f"📅 Période: {date_from} → {date_to}")
         print(f"🌍 Timezone: {timezone}")
@@ -976,7 +980,7 @@ async def scrape_economic_calendar(
             end_date = datetime.strptime(date_to, "%Y-%m-%d")
             total_days = (end_date - start_date).days + 1
 
-            print(f"📊 Nombre de jours: {total_days}")
+            print(f"[INFO] Nombre de jours: {total_days}")
             print(f"📆 Stratégie: découpage en chunks de {days_per_chunk} jour(s)\n")
 
             all_events = []
@@ -1047,7 +1051,7 @@ async def scrape_economic_calendar(
                     if event_id:
                         all_event_ids.add(event_id)
 
-                print(f"   ✅ {len(combined_events)} événements extraits, {new_events_count} nouveaux, {duplicate_count} doublons")
+                print(f"   [OK] {len(combined_events)} evenements extraits, {new_events_count} nouveaux, {duplicate_count} doublons")
 
                 # Vérifier la limite max_events
                 if max_events is not None and len(all_events) >= max_events:
@@ -1057,7 +1061,7 @@ async def scrape_economic_calendar(
                 current_date = chunk_end + timedelta(days=1)
 
             print("\n" + "="*70)
-            print(f"✅ SCRAPING TERMINÉ - {len(all_events)} événements extraits sur {chunk_num} chunk(s)")
+            print(f"[OK] SCRAPING TERMINE - {len(all_events)} evenements extraits sur {chunk_num} chunk(s)")
             print("="*70 + "\n")
 
             return {
@@ -1081,7 +1085,7 @@ async def scrape_economic_calendar(
     except Exception as e:
         import traceback
         error_detail = traceback.format_exc()
-        print(f"❌ Erreur détaillée:\n{error_detail}")
+        print(f"[ERROR] Erreur detaillee:\n{error_detail}")
         return {
             "success": False,
             "events": [],
@@ -1199,7 +1203,7 @@ def _extract_holidays_fallback(html_content: str) -> List[Dict[str, Any]]:
                 
     except Exception as e:
         import traceback
-        print(f"❌ Erreur lors de l'extraction des jours fériés: {type(e).__name__}")
+        print(f"[ERROR] Erreur lors de l'extraction des jours feries: {type(e).__name__}")
         print(f"   Message: {str(e)}")
         traceback.print_exc()
     
