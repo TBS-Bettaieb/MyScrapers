@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+
+# Build
+release/
+build/
+
+# Git
+.git/
+.gitignore
+
+# Deployment
+deploy/
+DEPLOYMENT.md
+
+# Documentation
+README.md
+
+# Source files
+source enum/
+enums_output.txt
+
+# Scripts
+build-release.sh
+deploy.sh
