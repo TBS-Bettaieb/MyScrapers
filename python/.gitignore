@@ -31,6 +31,23 @@ wheels/
 .env
 .venv
 
+# Logs
+logs/
+*.log
+
+# Build et release
+build/
+release/
+*.tar.gz
+*.sha256
+
+# Rapports
+deployment-report-*.txt
+
+# Backups
+backup/
+*.backup
+
 # IDE
 .vscode/
 .idea/
