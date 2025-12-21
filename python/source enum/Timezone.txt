@@ -1,0 +1,79 @@
+<ul class="js-scrollable-block">
+                                    <li class="addRow" id="liTz2">(GMT -11:00) Midway Island</li>
+                                        <li class="addRow" id="liTz35">(GMT -11:00) Samoa</li>
+                                        <li class="addRow" id="liTz3">(GMT -10:00) Hawaii</li>
+                                        <li class="addRow" id="liTz4">(GMT -9:00) Alaska</li>
+                                        <li class="addRow" id="liTz36">(GMT -8:00) Baja California</li>
+                                        <li class="addRow" id="liTz5">(GMT -8:00) Pacific Time (US &amp; Canada)</li>
+                                        <li class="addRow" id="liTz37">(GMT -7:00) Arizona</li>
+                                        <li class="addRow" id="liTz6">(GMT -7:00) Mountain Time (US &amp; Canada)</li>
+                                        <li class="addRow" id="liTz39">(GMT -6:00) Central America</li>
+                                        <li class="addRow" id="liTz7">(GMT -6:00) Central Time (US &amp; Canada)</li>
+                                        <li class="addRow" id="liTz38">(GMT -6:00) Chihuahua, La Paz, Mazatlan</li>
+                                        <li class="addRow" id="liTz40">(GMT -6:00) Guadalajara, Mexico City, Monterrey</li>
+                                        <li class="addRow" id="liTz41">(GMT -6:00) Saskatchewan</li>
+                                        <li class="addRow" id="liTz42">(GMT -5:00) Bogota, Lima, Quito</li>
+                                        <li class="addRow" id="liTz8">(GMT -5:00) Eastern Time (US &amp; Canada)</li>
+                                        <li class="addRow" id="liTz43">(GMT -5:00) Indiana (East)</li>
+                                        <li class="addRow" id="liTz10">(GMT -4:00) Atlantic Time (Canada)</li>
+                                        <li class="addRow" id="liTz9">(GMT -4:00) Caracas</li>
+                                        <li class="addRow" id="liTz45">(GMT -4:00) Cuiaba</li>
+                                        <li class="addRow" id="liTz46">(GMT -4:00) Georgetown, La Paz, Manaus, San Juan</li>
+                                        <li class="addRow" id="liTz11">(GMT -3:30) Newfoundland</li>
+                                        <li class="addRow" id="liTz44">(GMT -3:00) Asuncion</li>
+                                        <li class="addRow" id="liTz12">(GMT -3:00) Brasilia</li>
+                                        <li class="addRow" id="liTz48">(GMT -3:00) Buenos Aires</li>
+                                        <li class="addRow" id="liTz49">(GMT -3:00) Cayenne, Fortaleza</li>
+                                        <li class="addRow" id="liTz50">(GMT -3:00) Greenland</li>
+                                        <li class="addRow" id="liTz51">(GMT -3:00) Montevideo</li>
+                                        <li class="addRow" id="liTz47">(GMT -3:00) Santiago</li>
+                                        <li class="addRow" id="liTz14">(GMT -1:00) Azores</li>
+                                        <li class="addRow" id="liTz53">(GMT -1:00) Cape Verde Is.</li>
+                                        <li class="addRow" id="liTz55">(GMT) Coordinated Universal Time</li>
+                                        <li class="addRow" id="liTz15">(GMT) Dublin, Edinburgh, Lisbon, London</li>
+                                        <li class="addRow" id="liTz56">(GMT) Monrovia, Reykjavik</li>
+                                        <li class="addRow" id="liTz16">(GMT +1:00) Amsterdam, Berlin, Bern, Rome, Stockholm, Vienna</li>
+                                        <li class="addRow" id="liTz57">(GMT +1:00) Belgrade, Bratislava, Budapest, Ljubljana, Prague</li>
+                                        <li class="addRow" id="liTz58">(GMT +1:00) Brussels, Copenhagen, Madrid, Paris</li>
+                                        <li class="addRow" id="liTz54">(GMT +1:00) Casablanca</li>
+                                        <li class="addRow" id="liTz166">(GMT +1:00) Lagos</li>
+                                        <li class="addRow" id="liTz59">(GMT +1:00) Sarajevo, Skopje, Warsaw, Zagreb</li>
+                                        <li class="addRow" id="liTz60">(GMT +1:00) West Central Africa</li>
+                                        <li class="addRow" id="liTz62">(GMT +2:00) Amman</li>
+                                        <li class="addRow" id="liTz64">(GMT +2:00) Beirut</li>
+                                        <li class="addRow" id="liTz65">(GMT +2:00) Cairo</li>
+                                        <li class="addRow" id="liTz66">(GMT +2:00) Damascus</li>
+                                        <li class="addRow" id="liTz68">(GMT +2:00) Helsinki, Kyiv, Riga, Sofia, Tallinn, Vilnius</li>
+                                        <li class="addRow" id="liTz17">(GMT +2:00) Jerusalem</li>
+                                        <li class="addRow" id="liTz67">(GMT +02:00) Johannesburg</li>
+                                        <li class="addRow" id="liTz61">(GMT +2:00) Windhoek</li>
+                                        <li class="addRow" id="liTz71">(GMT +3:00) Baghdad</li>
+                                        <li class="addRow" id="liTz63">(GMT +3:00) Istanbul</li>
+                                        <li class="addRow" id="liTz70">(GMT +3:00) Kuwait, Riyadh</li>
+                                        <li class="addRow" id="liTz18">(GMT +3:00) Moscow, St. Petersburg, Volgograd</li>
+                                        <li class="addRow" id="liTz72">(GMT +3:00) Nairobi</li>
+                                        <li class="addRow" id="liTz19">(GMT +3:30) Tehran</li>
+                                        <li class="addRow" id="liTz20">(GMT +4:00) Abu Dhabi, Dubai, Muscat</li>
+                                        <li class="addRow" id="liTz73">(GMT +4:00) Baku</li>
+                                        <li class="addRow" id="liTz21">(GMT +4:30) Kabul</li>
+                                        <li class="addRow" id="liTz22">(GMT +5:00) Ekaterinburg</li>
+                                        <li class="addRow" id="liTz77">(GMT +5:00) Karachi</li>
+                                        <li class="addRow" id="liTz23">(GMT +5:30) Chennai, Kolkata, Mumbai, New Delhi</li>
+                                        <li class="addRow" id="liTz79">(GMT +5:30) Colombo</li>
+                                        <li class="addRow" id="liTz24">(GMT +5:45) Kathmandu</li>
+                                        <li class="addRow" id="liTz25">(GMT +6:00) Dhaka</li>
+                                        <li class="addRow" id="liTz26">(GMT +6:30) Yangon (Rangoon)</li>
+                                        <li class="addRow" id="liTz27">(GMT +7:00) Bangkok, Hanoi, Jakarta</li>
+                                        <li class="addRow" id="liTz28">(GMT +8:00) Beijing, Chongqing, Hong Kong, Urumqi</li>
+                                        <li class="addRow" id="liTz178">(GMT +08:00) Manila</li>
+                                        <li class="addRow" id="liTz113">(GMT +8:00) Singapore</li>
+                                        <li class="addRow" id="liTz29">(GMT +9:00) Osaka, Sapporo, Tokyo</li>
+                                        <li class="addRow" id="liTz88">(GMT +9:00) Seoul</li>
+                                        <li class="addRow" id="liTz91">(GMT +10:00) Brisbane</li>
+                                        <li class="addRow" id="liTz94">(GMT +10:00) Vladivostok</li>
+                                        <li class="addRow" id="liTz30">(GMT +10:30) Adelaide</li>
+                                        <li class="addRow" id="liTz31">(GMT +11:00) Canberra, Melbourne, Sydney</li>
+                                        <li class="addRow" id="liTz32">(GMT +11:00) Solomon Is., New Caledonia</li>
+                                        <li class="addRow" id="liTz1">(GMT +12:00) Eniwetok, Kwajalein</li>
+                                        <li class="addRow" id="liTz33">(GMT +13:00) Auckland, Wellington</li>
+                                </ul>
