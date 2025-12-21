@@ -19,7 +19,7 @@ Le serveur utilise un fichier Docker Compose centralisé dans `/root/docker-comp
 
 - **Adresse** : root@31.97.53.244
 - **Domaine principal** : srv842470.hstgr.cloud
-- **URL API** : https://investing-api.srv842470.hstgr.cloud
+- **URL API** : https://myscrapers.srv842470.hstgr.cloud
 
 ## 🐳 Services Docker
 
@@ -32,7 +32,7 @@ Le serveur utilise un fichier Docker Compose centralisé dans `/root/docker-comp
 - URL : https://n8n.srv842470.hstgr.cloud
 
 ### investing-api (Cette API)
-- URL : https://investing-api.srv842470.hstgr.cloud
+- URL : https://myscrapers.srv842470.hstgr.cloud
 - Container : investing-calendar-api
 - Workers : 4
 - Port interne : 8001
@@ -67,14 +67,14 @@ docker-compose up -d --build investing-api
 docker logs investing-calendar-api --tail=50
 
 # Tester l'API
-curl https://investing-api.srv842470.hstgr.cloud/health
+curl https://myscrapers.srv842470.hstgr.cloud/health
 ```
 
 ## 🔐 Configuration SSL/TLS
 
 Le certificat SSL est automatiquement géré par Traefik via Let's Encrypt :
 - **Émetteur** : Let's Encrypt (R12)
-- **Domaine** : investing-api.srv842470.hstgr.cloud
+- **Domaine** : myscrapers.srv842470.hstgr.cloud
 - **Méthode** : TLS Challenge
 - **Renouvellement** : Automatique
 
@@ -114,7 +114,7 @@ cd /root && docker-compose restart investing-api
 docker logs root_traefik_1 --tail=100
 
 # Vérifier le certificat SSL
-curl -vI https://investing-api.srv842470.hstgr.cloud 2>&1 | grep -E 'subject|issuer'
+curl -vI https://myscrapers.srv842470.hstgr.cloud 2>&1 | grep -E 'subject|issuer'
 ```
 
 ## 🔒 Backup

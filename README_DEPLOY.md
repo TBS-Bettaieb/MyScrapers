@@ -13,10 +13,10 @@ L'API est déployée sur le serveur VPS via le fichier Docker Compose principal 
 
 L'API est accessible publiquement via HTTPS :
 
-- **API** : https://investing-api.srv842470.hstgr.cloud
-- **Health Check** : https://investing-api.srv842470.hstgr.cloud/health
-- **Documentation Swagger** : https://investing-api.srv842470.hstgr.cloud/docs
-- **ReDoc** : https://investing-api.srv842470.hstgr.cloud/redoc
+- **API** : https://myscrapers.srv842470.hstgr.cloud
+- **Health Check** : https://myscrapers.srv842470.hstgr.cloud/health
+- **Documentation Swagger** : https://myscrapers.srv842470.hstgr.cloud/docs
+- **ReDoc** : https://myscrapers.srv842470.hstgr.cloud/redoc
 
 ## 🔄 Mise à Jour du Code
 

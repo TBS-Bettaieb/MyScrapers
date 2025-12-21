@@ -6,9 +6,9 @@ Guide rapide pour l'API Investing Calendar.
 
 L'API est déjà déployée et accessible publiquement :
 
-- **URL** : https://investing-api.srv842470.hstgr.cloud
-- **Health** : https://investing-api.srv842470.hstgr.cloud/health
-- **Docs** : https://investing-api.srv842470.hstgr.cloud/docs
+- **URL** : https://myscrapers.srv842470.hstgr.cloud
+- **Health** : https://myscrapers.srv842470.hstgr.cloud/health
+- **Docs** : https://myscrapers.srv842470.hstgr.cloud/docs
 
 ## 🔄 Mise à Jour du Code
 

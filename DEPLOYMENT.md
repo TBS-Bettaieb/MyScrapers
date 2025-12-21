@@ -13,7 +13,7 @@ Le serveur utilise un fichier Docker Compose principal (`/root/docker-compose.ym
 
 - **Serveur** : root@31.97.53.244
 - **Domaine** : srv842470.hstgr.cloud
-- **URL API** : https://investing-api.srv842470.hstgr.cloud
+- **URL API** : https://myscrapers.srv842470.hstgr.cloud
 - **Emplacement code** : /root/investing-com-scraper/MyScrapers
 - **Docker Compose** : /root/docker-compose.yml
 
@@ -100,7 +100,7 @@ GENERIC_TIMEZONE=Europe/Berlin
 SSL_EMAIL=user@srv842470.hstgr.cloud
 ```
 
-L'API utilise le domaine : `investing-api.${DOMAIN_NAME}` → `investing-api.srv842470.hstgr.cloud`
+L'API utilise le domaine : `investing-api.${DOMAIN_NAME}` → `myscrapers.srv842470.hstgr.cloud`
 
 ### Configuration SSL/HTTPS
 
@@ -163,24 +163,24 @@ git log --oneline -10
 docker exec investing-calendar-api curl -f http://localhost:8001/health
 
 # Test via localhost
-curl -H 'Host: investing-api.srv842470.hstgr.cloud' https://localhost/health
+curl -H 'Host: myscrapers.srv842470.hstgr.cloud' https://localhost/health
 ```
 
 ### Test public (depuis n'importe où)
 
 ```bash
 # Health check
-curl https://investing-api.srv842470.hstgr.cloud/health
+curl https://myscrapers.srv842470.hstgr.cloud/health
 
 # Test complet
-curl https://investing-api.srv842470.hstgr.cloud/docs
+curl https://myscrapers.srv842470.hstgr.cloud/docs
 ```
 
 ### Accès via navigateur
 
-- **Health** : https://investing-api.srv842470.hstgr.cloud/health
-- **Swagger UI** : https://investing-api.srv842470.hstgr.cloud/docs
-- **ReDoc** : https://investing-api.srv842470.hstgr.cloud/redoc
+- **Health** : https://myscrapers.srv842470.hstgr.cloud/health
+- **Swagger UI** : https://myscrapers.srv842470.hstgr.cloud/docs
+- **ReDoc** : https://myscrapers.srv842470.hstgr.cloud/redoc
 
 ## Monitoring et Maintenance
 
@@ -284,10 +284,10 @@ sudo usermod -aG docker $USER
 
 L'API est accessible publiquement via HTTPS :
 
-- **API** : https://investing-api.srv842470.hstgr.cloud
-- **Health** : https://investing-api.srv842470.hstgr.cloud/health
-- **Swagger** : https://investing-api.srv842470.hstgr.cloud/docs
-- **ReDoc** : https://investing-api.srv842470.hstgr.cloud/redoc
+- **API** : https://myscrapers.srv842470.hstgr.cloud
+- **Health** : https://myscrapers.srv842470.hstgr.cloud/health
+- **Swagger** : https://myscrapers.srv842470.hstgr.cloud/docs
+- **ReDoc** : https://myscrapers.srv842470.hstgr.cloud/redoc
 
 ## Structure du Projet
 
