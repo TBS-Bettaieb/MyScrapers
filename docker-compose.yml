@@ -1,0 +1,28 @@
+version: '3.8'
+
+# Configuration Docker Compose pour développement local
+# Sur le serveur de production, le service est défini dans /root/docker-compose.yml
+
+services:
+  investing-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: investing-calendar-api
+    restart: unless-stopped
+    environment:
+      - HOST=${HOST:-0.0.0.0}
+      - PORT=${PORT:-8001}
+      - WORKERS=${WORKERS:-4}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DEFAULT_TIMEZONE=${DEFAULT_TIMEZONE:-55}
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
