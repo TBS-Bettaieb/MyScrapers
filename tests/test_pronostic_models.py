@@ -2,6 +2,12 @@
 Test des modeles de donnees pour les pronostics
 """
 import asyncio
+import sys
+from pathlib import Path
+
+# Add parent directory to path to import modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from models import Pronostic, PronosticResponse
 
 
@@ -132,7 +138,7 @@ async def test_with_real_scraper():
     print("\n=== Test avec le scraper FreeSupertips ===")
 
     try:
-        from pronostic_scraper import scrape_freesupertips
+        from scrapers.pronostic import scrape_freesupertips
 
         # Scraper avec limite de 3 tips
         result = await scrape_freesupertips(max_tips=3, debug_mode=True)

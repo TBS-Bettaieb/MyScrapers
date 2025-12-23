@@ -7,8 +7,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 from typing import Optional, List, Dict, Any
-from investing_scraper import scrape_economic_calendar
-from pronostic_scraper import scrape_footyaccumulators, scrape_freesupertips
+from scrapers.investing_scraper import scrape_economic_calendar
+from scrapers.pronostic import scrape_footyaccumulators, scrape_freesupertips
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
