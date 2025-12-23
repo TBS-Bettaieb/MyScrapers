@@ -67,7 +67,11 @@
       "Bash(netstat:*)",
       "Bash(findstr:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(del:*)",
+      "Bash(python test_footy_structure.py:*)",
+      "Bash(python test_footy_odds.py:*)",
+      "Bash(python:*)"
     ]
   }
 }

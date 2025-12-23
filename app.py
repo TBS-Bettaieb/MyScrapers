@@ -318,24 +318,17 @@ class PronosticResponse(BaseModel):
 
 
 @app.get("/scrape/footyaccumulators")
-async def scrape_footyaccumulators_endpoint(
-    max_tips: Optional[int] = Query(None, description="Nombre maximum de pronostics à récupérer"),
-    debug: Optional[bool] = Query(False, description="Active les logs détaillés")
-):
+async def scrape_footyaccumulators_endpoint():
     """
     Scraper les pronostics de FootyAccumulators
-
-    Args:
-        max_tips: Nombre maximum de pronostics à récupérer (None = tous)
-        debug: Active les logs détaillés
 
     Returns:
         PronosticResponse avec la liste des pronostics
     """
     try:
         result = await scrape_footyaccumulators(
-            max_tips=max_tips,
-            debug_mode=debug
+            max_tips=None,
+            debug_mode=False
         )
 
         logger.info(f"FootyAccumulators scraping: success={result.get('success')}, total={result.get('total_pronostics', 0)}")
@@ -366,24 +359,17 @@ async def scrape_footyaccumulators_endpoint(
 
 
 @app.get("/scrape/freesupertips")
-async def scrape_freesupertips_endpoint(
-    max_tips: Optional[int] = Query(None, description="Nombre maximum de pronostics à récupérer"),
-    debug: Optional[bool] = Query(False, description="Active les logs détaillés")
-):
+async def scrape_freesupertips_endpoint():
     """
     Scraper les pronostics de FreeSupertips
-
-    Args:
-        max_tips: Nombre maximum de pronostics à récupérer (None = tous)
-        debug: Active les logs détaillés
 
     Returns:
         PronosticResponse avec la liste des pronostics
     """
     try:
         result = await scrape_freesupertips(
-            max_tips=max_tips,
-            debug_mode=debug
+            max_tips=None,
+            debug_mode=False
         )
 
         logger.info(f"FreeSupertips scraping: success={result.get('success')}, total={result.get('total_pronostics', 0)}")

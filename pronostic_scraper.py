@@ -430,6 +430,16 @@ async def scrape_footyaccumulators(
                             if starts_at:
                                 date_time = datetime.fromtimestamp(starts_at / 1000).isoformat()
 
+                            # Extraire les odds depuis outcomes.odds
+                            odds_value = None
+                            outcomes = tip_raw.get("outcomes", {})
+                            odds_list = outcomes.get("odds", [])
+                            if odds_list:
+                                # Prendre la valeur minimale des odds decimales
+                                decimal_odds = [odd.get("oddsDecimal") for odd in odds_list if odd.get("oddsDecimal")]
+                                if decimal_odds:
+                                    odds_value = min(decimal_odds)
+
                             # Si c'est un accumulateur avec plusieurs matchs
                             if grid:
                                 for match_info in grid:
@@ -473,7 +483,7 @@ async def scrape_footyaccumulators(
                                             "tipType": category_title.lower().replace(" ", "_"),
                                             "tipText": selection_name,
                                             "reasonTip": reason_text,
-                                            "odds": None,  # Les cotes sont dans predictionCodes mais complexes a extraire
+                                            "odds": odds_value,
                                             "confidence": None
                                         }
 
@@ -495,7 +505,7 @@ async def scrape_footyaccumulators(
                                     "tipType": category_title.lower().replace(" ", "_"),
                                     "tipText": None,
                                     "reasonTip": None,
-                                    "odds": None,
+                                    "odds": odds_value,
                                     "confidence": None
                                 }
 
