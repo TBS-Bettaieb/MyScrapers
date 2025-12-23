@@ -294,8 +294,19 @@ class PronosticTip(BaseModel):
     tipTitle: str
     tipType: Optional[str] = None
     tipText: Optional[str] = None
+    reasonTip: Optional[str] = None
     odds: Optional[float] = None
     confidence: Optional[str] = None
+
+    model_config = {
+        "extra": "forbid",
+        "json_schema_extra": {
+            "example": {
+                "match": "Arsenal vs Chelsea",
+                "reasonTip": "Arsenal have won their last 3 matches..."
+            }
+        }
+    }
 
 
 class PronosticResponse(BaseModel):
@@ -306,7 +317,7 @@ class PronosticResponse(BaseModel):
     error_message: Optional[str] = None
 
 
-@app.get("/scrape/footyaccumulators", response_model=PronosticResponse)
+@app.get("/scrape/footyaccumulators")
 async def scrape_footyaccumulators_endpoint(
     max_tips: Optional[int] = Query(None, description="Nombre maximum de pronostics à récupérer"),
     debug: Optional[bool] = Query(False, description="Active les logs détaillés")
@@ -330,12 +341,13 @@ async def scrape_footyaccumulators_endpoint(
         logger.info(f"FootyAccumulators scraping: success={result.get('success')}, total={result.get('total_pronostics', 0)}")
 
         if result["success"]:
-            return PronosticResponse(
-                success=True,
-                pronostics=result["pronostics"],
-                total_pronostics=result["total_pronostics"],
-                error_message=None
-            )
+            # Retourner directement le dictionnaire pour éviter la sérialisation Pydantic
+            return JSONResponse(content={
+                "success": True,
+                "pronostics": result["pronostics"],
+                "total_pronostics": result["total_pronostics"],
+                "error_message": None
+            })
         else:
             error_msg = result.get('error_message', 'Erreur inconnue')
             logger.error(f"FootyAccumulators scraping échoué: {error_msg}")
@@ -353,7 +365,7 @@ async def scrape_footyaccumulators_endpoint(
         )
 
 
-@app.get("/scrape/freesupertips", response_model=PronosticResponse)
+@app.get("/scrape/freesupertips")
 async def scrape_freesupertips_endpoint(
     max_tips: Optional[int] = Query(None, description="Nombre maximum de pronostics à récupérer"),
     debug: Optional[bool] = Query(False, description="Active les logs détaillés")
@@ -377,12 +389,13 @@ async def scrape_freesupertips_endpoint(
         logger.info(f"FreeSupertips scraping: success={result.get('success')}, total={result.get('total_pronostics', 0)}")
 
         if result["success"]:
-            return PronosticResponse(
-                success=True,
-                pronostics=result["pronostics"],
-                total_pronostics=result["total_pronostics"],
-                error_message=None
-            )
+            # Retourner directement le dictionnaire pour éviter la sérialisation Pydantic
+            return JSONResponse(content={
+                "success": True,
+                "pronostics": result["pronostics"],
+                "total_pronostics": result["total_pronostics"],
+                "error_message": None
+            })
         else:
             error_msg = result.get('error_message', 'Erreur inconnue')
             logger.error(f"FreeSupertips scraping échoué: {error_msg}")
