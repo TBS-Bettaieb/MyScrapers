@@ -1,13 +1,14 @@
 """
-API REST pour le scraping du calendrier économique investing.com
+API REST pour le scraping du calendrier économique investing.com et des pronostics sportifs
 Utilise FastAPI pour créer une API REST asynchrone
 """
 import logging
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from investing_scraper import scrape_economic_calendar
+from pronostic_scraper import scrape_footyaccumulators, scrape_freesupertips
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -15,9 +16,9 @@ logger = logging.getLogger(__name__)
 
 # Créer l'application FastAPI
 app = FastAPI(
-    title="Investing.com Economic Calendar API",
-    description="API REST pour scraper le calendrier économique d'investing.com",
-    version="1.0.0"
+    title="MyScrapers API",
+    description="API REST pour scraper le calendrier économique d'investing.com et les pronostics sportifs",
+    version="1.1.0"
 )
 
 
@@ -74,11 +75,13 @@ class InvestingScrapeResponse(BaseModel):
 async def root():
     """Endpoint racine avec informations sur l'API"""
     return {
-        "message": "Investing.com Economic Calendar API",
-        "version": "1.0.0",
+        "message": "MyScrapers API - Economic Calendar & Sports Betting Tips",
+        "version": "1.1.0",
         "endpoints": {
             "GET /scrape/investing": "Scraper le calendrier économique investing.com (GET)",
             "POST /scrape/investing": "Scraper le calendrier économique investing.com (POST)",
+            "GET /scrape/footyaccumulators": "Scraper les pronostics FootyAccumulators",
+            "GET /scrape/freesupertips": "Scraper les pronostics FreeSupertips",
             "GET /health": "Vérifier l'état de l'API",
             "GET /docs": "Documentation interactive (Swagger UI)"
         }
@@ -88,7 +91,7 @@ async def root():
 @app.get("/health")
 async def health():
     """Endpoint de santé pour vérifier que l'API fonctionne"""
-    return {"status": "healthy", "service": "Investing.com Economic Calendar API"}
+    return {"status": "healthy", "service": "MyScrapers API"}
 
 
 @app.get("/scrape/investing", response_model=InvestingScrapeResponse)
@@ -271,6 +274,126 @@ async def scrape_investing_post(request: InvestingScrapeRequest):
     except HTTPException:
         raise
     except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur serveur: {str(e)}"
+        )
+
+
+# =============================================================================
+# ENDPOINTS POUR PRONOSTICS SPORTIFS
+# =============================================================================
+
+class PronosticTip(BaseModel):
+    """Modèle pour un pronostic sportif simplifié"""
+    match: Optional[str] = None
+    dateTime: Optional[str] = None
+    competition: Optional[str] = None
+    homeTeam: Optional[str] = None
+    awayTeam: Optional[str] = None
+    tipTitle: str
+    tipType: Optional[str] = None
+    tipText: Optional[str] = None
+    odds: Optional[float] = None
+    confidence: Optional[str] = None
+
+
+class PronosticResponse(BaseModel):
+    """Modèle de réponse pour les pronostics sportifs"""
+    success: bool
+    pronostics: List[PronosticTip]
+    total_pronostics: int
+    error_message: Optional[str] = None
+
+
+@app.get("/scrape/footyaccumulators", response_model=PronosticResponse)
+async def scrape_footyaccumulators_endpoint(
+    max_tips: Optional[int] = Query(None, description="Nombre maximum de pronostics à récupérer"),
+    debug: Optional[bool] = Query(False, description="Active les logs détaillés")
+):
+    """
+    Scraper les pronostics de FootyAccumulators
+
+    Args:
+        max_tips: Nombre maximum de pronostics à récupérer (None = tous)
+        debug: Active les logs détaillés
+
+    Returns:
+        PronosticResponse avec la liste des pronostics
+    """
+    try:
+        result = await scrape_footyaccumulators(
+            max_tips=max_tips,
+            debug_mode=debug
+        )
+
+        logger.info(f"FootyAccumulators scraping: success={result.get('success')}, total={result.get('total_pronostics', 0)}")
+
+        if result["success"]:
+            return PronosticResponse(
+                success=True,
+                pronostics=result["pronostics"],
+                total_pronostics=result["total_pronostics"],
+                error_message=None
+            )
+        else:
+            error_msg = result.get('error_message', 'Erreur inconnue')
+            logger.error(f"FootyAccumulators scraping échoué: {error_msg}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Erreur lors du scraping: {error_msg}"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur serveur FootyAccumulators: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur serveur: {str(e)}"
+        )
+
+
+@app.get("/scrape/freesupertips", response_model=PronosticResponse)
+async def scrape_freesupertips_endpoint(
+    max_tips: Optional[int] = Query(None, description="Nombre maximum de pronostics à récupérer"),
+    debug: Optional[bool] = Query(False, description="Active les logs détaillés")
+):
+    """
+    Scraper les pronostics de FreeSupertips
+
+    Args:
+        max_tips: Nombre maximum de pronostics à récupérer (None = tous)
+        debug: Active les logs détaillés
+
+    Returns:
+        PronosticResponse avec la liste des pronostics
+    """
+    try:
+        result = await scrape_freesupertips(
+            max_tips=max_tips,
+            debug_mode=debug
+        )
+
+        logger.info(f"FreeSupertips scraping: success={result.get('success')}, total={result.get('total_pronostics', 0)}")
+
+        if result["success"]:
+            return PronosticResponse(
+                success=True,
+                pronostics=result["pronostics"],
+                total_pronostics=result["total_pronostics"],
+                error_message=None
+            )
+        else:
+            error_msg = result.get('error_message', 'Erreur inconnue')
+            logger.error(f"FreeSupertips scraping échoué: {error_msg}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Erreur lors du scraping: {error_msg}"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur serveur FreeSupertips: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Erreur serveur: {str(e)}"
