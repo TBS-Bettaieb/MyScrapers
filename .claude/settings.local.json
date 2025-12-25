@@ -71,7 +71,12 @@
       "Bash(del:*)",
       "Bash(python test_footy_structure.py:*)",
       "Bash(python test_footy_odds.py:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(if exist test_assopoker.py del test_assopoker.py)",
+      "Bash(if exist assopoker_test_results.json del assopoker_test_results.json)",
+      "Bash(if exist test_assopoker_quick.py del test_assopoker_quick.py)",
+      "Bash(if exist test_assopoker_detailed.py del test_assopoker_detailed.py)",
+      "Bash(if exist test_final_check.py del test_final_check.py)"
     ]
   }
 }

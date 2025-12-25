@@ -15,6 +15,7 @@ class Pronostic:
         match: Nom complet du match (ex: "Manchester United vs Liverpool")
         dateTime: Date et heure du match au format ISO (ex: "2025-12-23T15:00:00")
         competition: Nom de la competition (ex: "Premier League")
+        sport: Type de sport (ex: "Football", "Basket", "Tennis")
         homeTeam: Nom de l'equipe a domicile
         awayTeam: Nom de l'equipe a l'exterieur
         tipTitle: Titre du pronostic (ex: "Both Teams To Score")
@@ -27,6 +28,7 @@ class Pronostic:
     match: Optional[str] = None
     dateTime: Optional[str] = None
     competition: Optional[str] = None
+    sport: Optional[str] = None
     homeTeam: Optional[str] = None
     awayTeam: Optional[str] = None
     tipTitle: Optional[str] = None

@@ -1,8 +1,10 @@
-# Projet Python - API Calendrier Économique Investing.com
+# Projet Python - API Scrapers Multiples
 
-Ce projet fournit une API REST pour scraper le calendrier économique d'[investing.com](https://www.investing.com/economic-calendar/).
+Ce projet fournit une API REST pour scraper :
+- Le calendrier économique d'[investing.com](https://www.investing.com/economic-calendar/)
+- Les pronostics sportifs de FootyAccumulators, FreeSupertips et AssoPoker
 
-Il utilise FastAPI pour créer une API REST asynchrone qui permet de récupérer les événements économiques avec filtrage par dates, pays, catégories et importance.
+Il utilise FastAPI pour créer une API REST asynchrone qui permet de récupérer les événements économiques avec filtrage par dates, pays, catégories et importance, ainsi que les pronostics de paris sportifs.
 
 ## Prérequis
 
@@ -212,9 +214,72 @@ Le scraper utilise une stratégie de découpage par dates pour contourner les li
 3. Les résultats sont agrégés et les doublons sont filtrés
 4. Les cookies sont mis en cache pendant 1 heure pour éviter les appels Selenium répétés
 
+## Endpoints pour Pronostics Sportifs
+
+### GET /scrape/footyaccumulators - Scraper FootyAccumulators
+
+Récupère les pronostics de FootyAccumulators.
+
+```bash
+curl http://localhost:8001/scrape/footyaccumulators
+```
+
+### GET /scrape/freesupertips - Scraper FreeSupertips
+
+Récupère les pronostics de FreeSupertips.
+
+```bash
+curl http://localhost:8001/scrape/freesupertips
+```
+
+### GET /scrape/assopoker - Scraper AssoPoker
+
+Récupère les pronostics d'AssoPoker (schedine-oggi et pronostici-oggi).
+
+```bash
+curl http://localhost:8001/scrape/assopoker
+```
+
+## Format de réponse pour les pronostics
+
+```json
+{
+  "success": true,
+  "pronostics": [
+    {
+      "match": "Manchester United vs Liverpool",
+      "dateTime": "2025-12-25T15:00:00",
+      "competition": "Premier League",
+      "sport": "Calcio",
+      "homeTeam": "Manchester United",
+      "awayTeam": "Liverpool",
+      "tipTitle": "Both Teams To Score",
+      "tipType": "both_teams_to_score",
+      "tipText": "Yes - BTTS",
+      "reasonTip": "Both teams have strong attacking records...",
+      "odds": 1.85,
+      "confidence": "high"
+    }
+  ],
+  "total_pronostics": 58,
+  "error_message": null
+}
+```
+
 ## Notes techniques
+
+### Scraper Investing.com
 
 - Les cookies sont initialisés une seule fois avec Selenium, puis mis en cache
 - Les requêtes suivantes utilisent httpx (plus rapide) avec les cookies en cache
 - Le scraper gère automatiquement les limites de l'API en découpant les périodes
 - Les événements sont parsés depuis le HTML retourné par l'API
+
+### Scrapers de Pronostics
+
+- **FootyAccumulators** : Scrape via l'API Next.js interne
+- **FreeSupertips** : Scrape via l'API Next.js interne
+- **AssoPoker** : Scrape HTML depuis deux pages (schedine-oggi et pronostici-oggi)
+- Déduplication automatique des pronostics
+- Gestion des erreurs et timeouts
+- Support de BeautifulSoup pour le parsing HTML

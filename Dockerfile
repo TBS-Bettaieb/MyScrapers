@@ -57,7 +57,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 # Copier le code de l'application
 COPY app.py .
-COPY investing_scraper.py .
+COPY scrapers/ ./scrapers/
+COPY models/ ./models/
 
 # Cr\u00e9er un utilisateur non-root pour ex\u00e9cuter l'application
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app

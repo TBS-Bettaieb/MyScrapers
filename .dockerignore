@@ -49,3 +49,25 @@ enums_output.txt
 # Scripts
 build-release.sh
 deploy.sh
+backup.sh
+monitor.sh
+test-api.sh
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Documentation
+docs/
+CHANGES.md
+PROJECT_STRUCTURE.md
+QUICKSTART.md
+README_DEPLOY.md
+README_SERVER.md
+
+# Examples
+pronosticsExemples/
+
+# Makefile
+Makefile

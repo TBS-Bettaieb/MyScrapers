@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 from typing import Optional, List, Dict, Any
 from scrapers.investing_scraper import scrape_economic_calendar
-from scrapers.pronostic import scrape_footyaccumulators, scrape_freesupertips
+from scrapers.pronostic import scrape_footyaccumulators, scrape_freesupertips, scrape_assopoker
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -82,6 +82,7 @@ async def root():
             "POST /scrape/investing": "Scraper le calendrier économique investing.com (POST)",
             "GET /scrape/footyaccumulators": "Scraper les pronostics FootyAccumulators",
             "GET /scrape/freesupertips": "Scraper les pronostics FreeSupertips",
+            "GET /scrape/assopoker": "Scraper les pronostics AssoPoker",
             "GET /health": "Vérifier l'état de l'API",
             "GET /docs": "Documentation interactive (Swagger UI)"
         }
@@ -289,6 +290,7 @@ class PronosticTip(BaseModel):
     match: Optional[str] = None
     dateTime: Optional[str] = None
     competition: Optional[str] = None
+    sport: Optional[str] = None
     homeTeam: Optional[str] = None
     awayTeam: Optional[str] = None
     tipTitle: str
@@ -393,6 +395,47 @@ async def scrape_freesupertips_endpoint():
         raise
     except Exception as e:
         logger.error(f"Erreur serveur FreeSupertips: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erreur serveur: {str(e)}"
+        )
+
+
+@app.get("/scrape/assopoker")
+async def scrape_assopoker_endpoint():
+    """
+    Scraper les pronostics de AssoPoker
+
+    Returns:
+        PronosticResponse avec la liste des pronostics
+    """
+    try:
+        result = await scrape_assopoker(
+            max_tips=None,
+            debug_mode=False
+        )
+
+        logger.info(f"AssoPoker scraping: success={result.get('success')}, total={result.get('total_pronostics', 0)}")
+
+        if result["success"]:
+            # Retourner directement le dictionnaire pour éviter la sérialisation Pydantic
+            return JSONResponse(content={
+                "success": True,
+                "pronostics": result["pronostics"],
+                "total_pronostics": result["total_pronostics"],
+                "error_message": None
+            })
+        else:
+            error_msg = result.get('error_message', 'Erreur inconnue')
+            logger.error(f"AssoPoker scraping échoué: {error_msg}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Erreur lors du scraping: {error_msg}"
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erreur serveur AssoPoker: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Erreur serveur: {str(e)}"
