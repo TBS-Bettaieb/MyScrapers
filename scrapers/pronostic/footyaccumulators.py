@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict, Optional, Any
 import httpx
 
-from .utils import deduplicate_pronostics
+from .utils import deduplicate_pronostics, generate_pronostic_id
 
 
 async def scrape_footyaccumulators(
@@ -150,6 +150,14 @@ async def scrape_footyaccumulators(
                                             reason_text = str(reason_json)
 
                                         pronostic = {
+                                            "id": generate_pronostic_id(
+                                                source="footyaccumulators",
+                                                home_team=home_team,
+                                                away_team=away_team,
+                                                date_time=match_date_time,
+                                                tip_text=selection_name
+                                            ),
+                                            "source": "footyaccumulators",
                                             "match": f"{home_team} vs {away_team}" if home_team and away_team else None,
                                             "dateTime": match_date_time,
                                             "competition": competition,
@@ -173,6 +181,14 @@ async def scrape_footyaccumulators(
                             else:
                                 # Tip simple sans grid
                                 pronostic = {
+                                    "id": generate_pronostic_id(
+                                        source="footyaccumulators",
+                                        home_team=None,
+                                        away_team=None,
+                                        date_time=date_time,
+                                        tip_text=None
+                                    ),
+                                    "source": "footyaccumulators",
                                     "match": None,
                                     "dateTime": date_time,
                                     "competition": None,

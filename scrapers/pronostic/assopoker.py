@@ -12,7 +12,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-from .utils import deduplicate_pronostics
+from .utils import deduplicate_pronostics, generate_pronostic_id
 
 
 def _setup_chrome_driver() -> webdriver.Chrome:
@@ -316,6 +316,14 @@ def _parse_schedine_page(html: str, debug_mode: bool = False) -> List[Dict[str, 
                                 pass
 
                     pronostic = {
+                        "id": generate_pronostic_id(
+                            source="assopoker",
+                            home_team=home_team,
+                            away_team=away_team,
+                            date_time=date_time,
+                            tip_text=tip_text
+                        ),
+                        "source": "assopoker",
                         "match": f"{home_team} vs {away_team}" if home_team and away_team else match_name,
                         "dateTime": date_time,
                         "competition": None,
@@ -486,6 +494,14 @@ def _parse_pronostici_page(html: str, debug_mode: bool = False) -> List[Dict[str
                             pass
 
                     pronostic = {
+                        "id": generate_pronostic_id(
+                            source="assopoker",
+                            home_team=home_team,
+                            away_team=away_team,
+                            date_time=date_time,
+                            tip_text=tip_text
+                        ),
+                        "source": "assopoker",
                         "match": match_name,
                         "dateTime": date_time,
                         "competition": competition,

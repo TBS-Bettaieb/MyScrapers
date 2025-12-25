@@ -1,7 +1,49 @@
 """
 Utility functions for pronostic scrapers
 """
+import re
 from typing import Dict, List, Any
+
+
+def generate_pronostic_id(source: str, home_team: str, away_team: str, date_time: str, tip_text: str) -> str:
+    """
+    Generate a unique ID for a pronostic by concatenating fields and replacing whitespace with underscores.
+
+    Args:
+        source: Source scraper name (e.g., 'footyaccumulators', 'freesupertips', 'assopoker')
+        home_team: Home team name
+        away_team: Away team name
+        date_time: DateTime in ISO format
+        tip_text: Tip text/selection
+
+    Returns:
+        Unique ID string with format: source_hometeam_awayteam_date_tiptext
+    """
+    # Handle None values
+    home = str(home_team or '').strip()
+    away = str(away_team or '').strip()
+    date = str(date_time or '').strip()
+    tip = str(tip_text or '').strip()
+
+    # Concatenate fields
+    id_parts = [source, home, away, date, tip]
+
+    # Join with underscore and replace all whitespace with underscore
+    id_string = '_'.join(id_parts)
+
+    # Replace all whitespace (spaces, tabs, newlines) with single underscore
+    id_string = re.sub(r'\s+', '_', id_string)
+
+    # Remove special characters that might cause issues
+    id_string = re.sub(r'[^\w\-_.]', '_', id_string)
+
+    # Replace multiple consecutive underscores with single underscore
+    id_string = re.sub(r'_+', '_', id_string)
+
+    # Remove leading/trailing underscores
+    id_string = id_string.strip('_')
+
+    return id_string
 
 
 def deduplicate_pronostics(pronostics: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

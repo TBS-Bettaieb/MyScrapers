@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict, Optional, Any
 import httpx
 
-from .utils import deduplicate_pronostics
+from .utils import deduplicate_pronostics, generate_pronostic_id
 
 
 async def scrape_freesupertips(
@@ -91,6 +91,14 @@ async def scrape_freesupertips(
                     reason_tip = re.sub(r'<[^>]+>', '', reasoning_description).strip()
 
                     pronostic = {
+                        "id": generate_pronostic_id(
+                            source="freesupertips",
+                            home_team=home_team,
+                            away_team=away_team,
+                            date_time=date_time,
+                            tip_text=tip_text
+                        ),
+                        "source": "freesupertips",
                         "match": f"{home_team} vs {away_team}" if home_team and away_team else prediction.get("name"),
                         "dateTime": date_time,
                         "competition": competition,
@@ -164,6 +172,14 @@ async def scrape_freesupertips(
                                 text_one = leg.get("textOne", tip_title)
 
                                 pronostic = {
+                                    "id": generate_pronostic_id(
+                                        source="freesupertips",
+                                        home_team=home_team,
+                                        away_team=away_team,
+                                        date_time=leg_date_time,
+                                        tip_text=text_one
+                                    ),
+                                    "source": "freesupertips",
                                     "match": leg.get("name") or f"{home_team} vs {away_team}",
                                     "dateTime": leg_date_time,
                                     "competition": competition,
@@ -190,6 +206,14 @@ async def scrape_freesupertips(
                     else:
                         # Tip simple sans legs
                         pronostic = {
+                            "id": generate_pronostic_id(
+                                source="freesupertips",
+                                home_team=None,
+                                away_team=None,
+                                date_time=date_time,
+                                tip_text=None
+                            ),
+                            "source": "freesupertips",
                             "match": None,
                             "dateTime": date_time,
                             "competition": competition,
