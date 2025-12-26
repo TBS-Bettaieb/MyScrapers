@@ -76,7 +76,8 @@
       "Bash(if exist assopoker_test_results.json del assopoker_test_results.json)",
       "Bash(if exist test_assopoker_quick.py del test_assopoker_quick.py)",
       "Bash(if exist test_assopoker_detailed.py del test_assopoker_detailed.py)",
-      "Bash(if exist test_final_check.py del test_final_check.py)"
+      "Bash(if exist test_final_check.py del test_final_check.py)",
+      "Bash(if exist test_scrapers_id_source.py del test_scrapers_id_source.py)"
     ]
   }
 }
