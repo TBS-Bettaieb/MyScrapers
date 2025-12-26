@@ -245,13 +245,14 @@ def _parse_schedine_page(html: str, debug_mode: bool = False) -> List[Dict[str, 
                     date_time = None
                     time_match = None
 
-                    # Chercher heure au format "13h30" ou "13:30"
-                    time_pattern = r'(?:à|ore)\s+(\d{1,2})h(\d{2})|(\d{2}):(\d{2})'
+                    # Chercher heure au format "13h30", "13h" ou "13:30"
+                    time_pattern = r'(?:à|ore)\s+(\d{1,2})h(\d{2})?|(\d{2}):(\d{2})'
                     time_match = re.search(time_pattern, match_cell)
 
                     if time_match and schedina_date:
-                        if time_match.group(1):  # Format "13h30"
-                            hour, minute = int(time_match.group(1)), int(time_match.group(2))
+                        if time_match.group(1):  # Format "13h30" ou "13h"
+                            hour = int(time_match.group(1))
+                            minute = int(time_match.group(2)) if time_match.group(2) else 0
                         else:  # Format "13:30"
                             hour, minute = int(time_match.group(3)), int(time_match.group(4))
                         date_time = schedina_date.replace(hour=hour, minute=minute).isoformat()
@@ -422,15 +423,16 @@ def _parse_pronostici_page(html: str, debug_mode: bool = False) -> List[Dict[str
                     if time_elem:
                         time_text = time_elem.get_text(strip=True)
 
-                        # Format 1: "Ven. 26 déc. 2025 - 19h30" (format Chrome traduit)
-                        date_match = re.search(r'(\d{1,2})\s+(\w+)\.?\s+(\d{4})\s*-\s*(\d{1,2})h(\d{2})', time_text, re.IGNORECASE)
+                        # Format 1: "Ven. 26 déc. 2025 - 19h30" ou "Ven. 26 déc. 2025 - 19h" (format Chrome traduit)
+                        date_match = re.search(r'(\d{1,2})\s+(\w+)\.?\s+(\d{4})\s*-\s*(\d{1,2})h(\d{2})?', time_text, re.IGNORECASE)
                         if date_match:
                             try:
-                                day, month_name, year, hour, minute = date_match.groups()
+                                day, month_name, year, hour, minute_str = date_match.groups()
                                 # Enlever le point final si présent
                                 month_name = month_name.rstrip('.')
                                 month = month_map_short.get(month_name.lower(), 1)
-                                date_time = datetime(int(year), month, int(day), int(hour), int(minute)).isoformat()
+                                minute = int(minute_str) if minute_str else 0
+                                date_time = datetime(int(year), month, int(day), int(hour), minute).isoformat()
                             except Exception as e:
                                 if debug_mode:
                                     print(f"[AssoPoker] Error parsing date format 1: {e}")
