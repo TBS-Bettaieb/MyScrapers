@@ -59,9 +59,12 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY app.py .
 COPY scrapers/ ./scrapers/
 COPY models/ ./models/
+COPY unification/ ./unification/
 
 # Cr\u00e9er un utilisateur non-root pour ex\u00e9cuter l'application
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+RUN mkdir -p /app/chroma_db && \
+    useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
 USER appuser
 
 # Exposer le port de l'application
@@ -71,6 +74,9 @@ EXPOSE 8001
 ENV HOST=0.0.0.0
 ENV PORT=8001
 ENV WORKERS=4
+ENV OLLAMA_URL=http://localhost:11434
+ENV OLLAMA_MODEL=nomic-embed-text
+ENV CHROMA_PATH=/app/chroma_db
 
 # Commande de d\u00e9marrage
 CMD ["sh", "-c", "uvicorn app:app --host ${HOST} --port ${PORT} --workers ${WORKERS}"]

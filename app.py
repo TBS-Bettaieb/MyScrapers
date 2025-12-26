@@ -10,6 +10,9 @@ from typing import Optional, List, Dict, Any
 from scrapers.investing_scraper import scrape_economic_calendar
 from scrapers.pronostic import scrape_footyaccumulators, scrape_freesupertips, scrape_assopoker
 
+# Importer le module d'unification
+from unification import unification_router, init_chromadb, load_initial_mappings
+
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,8 +21,31 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="MyScrapers API",
     description="API REST pour scraper le calendrier économique d'investing.com et les pronostics sportifs",
-    version="1.1.0"
+    version="1.2.0"
 )
+
+# Monter le router d'unification
+app.include_router(unification_router, prefix="/unify", tags=["Unification"])
+
+
+# ============ Événements de startup/shutdown ============
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialiser ChromaDB et charger les mappings au démarrage"""
+    try:
+        logger.info("🚀 Initializing Unification Service...")
+
+        # Initialiser ChromaDB
+        init_chromadb()
+
+        # Charger les mappings de base si ChromaDB est vide
+        await load_initial_mappings()
+
+        logger.info("✅ Unification service initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Error initializing unification service: {e}")
+        logger.warning("⚠️  Unification endpoints will not work properly")
 
 
 class InvestingEvent(BaseModel):
@@ -76,7 +102,7 @@ async def root():
     """Endpoint racine avec informations sur l'API"""
     return {
         "message": "MyScrapers API - Economic Calendar & Sports Betting Tips",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "endpoints": {
             "GET /scrape/investing": "Scraper le calendrier économique investing.com (GET)",
             "POST /scrape/investing": "Scraper le calendrier économique investing.com (POST)",
@@ -84,6 +110,12 @@ async def root():
             "GET /scrape/freesupertips": "Scraper les pronostics FreeSupertips",
             "GET /scrape/assopoker": "Scraper les pronostics AssoPoker",
             "GET /health": "Vérifier l'état de l'API",
+            "GET /unify/health": "Vérifier l'état du service d'unification",
+            "POST /unify": "Unifier un sport ou type de pari",
+            "POST /unify/bulk": "Unifier en batch (pour N8N)",
+            "POST /unify/mapping/add": "Ajouter un mapping manuel",
+            "POST /unify/mapping/bulk-add": "Ajouter plusieurs mappings",
+            "GET /unify/mappings/{type}": "Récupérer tous les mappings (sport ou tip_type)",
             "GET /docs": "Documentation interactive (Swagger UI)"
         }
     }

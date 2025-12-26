@@ -16,10 +16,15 @@ services:
       - WORKERS=${WORKERS:-4}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DEFAULT_TIMEZONE=${DEFAULT_TIMEZONE:-55}
+      # Unification Service
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-nomic-embed-text}
+      - CHROMA_PATH=/app/chroma_db
     ports:
       - "8001:8001"
     volumes:
       - ./logs:/app/logs
+      - ./chroma_db:/app/chroma_db
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
