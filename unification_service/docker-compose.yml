@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  unification-service:
+    build: .
+    container_name: unification-service
+    ports:
+      - "8002:8002"
+    volumes:
+      # Persister la base ChromaDB
+      - ./chroma_db:/app/chroma_db
+      # Persister les modèles Ollama
+      - ollama_data:/root/.ollama
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  ollama_data:
