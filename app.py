@@ -11,7 +11,7 @@ from scrapers.investing_scraper import scrape_economic_calendar
 from scrapers.pronostic import scrape_footyaccumulators, scrape_freesupertips, scrape_assopoker
 
 # Importer le module d'unification
-from unification import unification_router, init_chromadb, load_initial_mappings
+from unification import unification_router, init_postgres, load_initial_mappings
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -32,14 +32,14 @@ app.include_router(unification_router, prefix="/unify", tags=["Unification"])
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialiser ChromaDB et charger les mappings au démarrage"""
+    """Initialiser PostgreSQL et charger les mappings au démarrage"""
     try:
         logger.info("🚀 Initializing Unification Service...")
 
-        # Initialiser ChromaDB
-        init_chromadb()
+        # Initialiser PostgreSQL
+        init_postgres()
 
-        # Charger les mappings de base si ChromaDB est vide
+        # Charger les mappings de base si PostgreSQL est vide
         await load_initial_mappings()
 
         logger.info("✅ Unification service initialized successfully")

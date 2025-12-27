@@ -1,6 +1,6 @@
 """
 Module d'unification pour sports et tip types
-Utilise Ollama + ChromaDB pour la recherche sémantique
+Utilise Ollama + PostgreSQL avec pgvector pour la recherche sémantique
 """
 import os
 import logging
@@ -8,8 +8,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 import ollama
-import chromadb
-from pathlib import Path
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import numpy as np
 
 from .mappings import SPORTS_MAPPINGS, TIP_TYPES_MAPPINGS
 
@@ -19,13 +20,15 @@ logger = logging.getLogger(__name__)
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "nomic-embed-text")
 
-# Configuration ChromaDB
-CHROMA_PATH = Path(os.getenv("CHROMA_PATH", "./chroma_db"))
+# Configuration PostgreSQL
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "unification")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
 
-# Collections globales (initialisées au startup)
-sports_collection = None
-tips_collection = None
-chroma_client = None
+# Connexion PostgreSQL globale
+pg_conn = None
 
 
 # ============ Modèles Pydantic ============
@@ -56,57 +59,121 @@ class BulkUnificationRequest(BaseModel):
 
 # ============ Fonctions d'initialisation ============
 
-def init_chromadb():
-    """Initialiser ChromaDB et créer les collections"""
-    global chroma_client, sports_collection, tips_collection
+def get_db_connection():
+    """Obtenir une connexion à la base de données PostgreSQL"""
+    return psycopg2.connect(
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        dbname=POSTGRES_DB,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD
+    )
+
+
+def init_postgres():
+    """Initialiser PostgreSQL et créer les tables avec pgvector"""
+    global pg_conn
 
     try:
-        # Créer le répertoire si nécessaire
-        CHROMA_PATH.mkdir(parents=True, exist_ok=True)
+        # Se connecter à PostgreSQL
+        pg_conn = get_db_connection()
+        cursor = pg_conn.cursor()
 
-        # Initialiser le client ChromaDB
-        chroma_client = chromadb.PersistentClient(path=str(CHROMA_PATH))
+        # Créer l'extension pgvector si elle n'existe pas
+        cursor.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
-        # Créer les collections
-        sports_collection = chroma_client.get_or_create_collection("sports")
-        tips_collection = chroma_client.get_or_create_collection("tip_types")
+        # Créer la table des mappings sports
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sports_mappings (
+                id SERIAL PRIMARY KEY,
+                original TEXT NOT NULL,
+                unified TEXT NOT NULL,
+                embedding vector(768),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(original, unified)
+            );
+        """)
 
-        logger.info(f"✅ ChromaDB initialized at {CHROMA_PATH}")
-        logger.info(f"   - Sports mappings: {sports_collection.count()}")
-        logger.info(f"   - Tip types mappings: {tips_collection.count()}")
+        # Créer la table des mappings tip types
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tip_types_mappings (
+                id SERIAL PRIMARY KEY,
+                original TEXT NOT NULL,
+                unified TEXT NOT NULL,
+                embedding vector(768),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(original, unified)
+            );
+        """)
+
+        # Créer des index pour la recherche vectorielle
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS sports_embedding_idx
+            ON sports_mappings USING ivfflat (embedding vector_cosine_ops)
+            WITH (lists = 100);
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS tips_embedding_idx
+            ON tip_types_mappings USING ivfflat (embedding vector_cosine_ops)
+            WITH (lists = 100);
+        """)
+
+        pg_conn.commit()
+
+        # Compter les entrées
+        cursor.execute("SELECT COUNT(*) FROM sports_mappings;")
+        sports_count = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM tip_types_mappings;")
+        tips_count = cursor.fetchone()[0]
+
+        logger.info(f"✅ PostgreSQL initialized")
+        logger.info(f"   - Sports mappings: {sports_count}")
+        logger.info(f"   - Tip types mappings: {tips_count}")
+
+        cursor.close()
 
         return {
-            "sports": sports_collection,
-            "tips": tips_collection
+            "sports": sports_count,
+            "tips": tips_count
         }
     except Exception as e:
-        logger.error(f"❌ Error initializing ChromaDB: {e}")
+        logger.error(f"❌ Error initializing PostgreSQL: {e}")
         raise
 
 
 async def load_initial_mappings():
-    """Charger les mappings de base si ChromaDB est vide"""
-    global sports_collection, tips_collection
+    """Charger les mappings de base si la base est vide"""
+    global pg_conn
 
     try:
-        # Vérifier si les collections sont vides
-        sports_count = sports_collection.count()
-        tips_count = tips_collection.count()
+        cursor = pg_conn.cursor()
+
+        # Vérifier si les tables sont vides
+        cursor.execute("SELECT COUNT(*) FROM sports_mappings;")
+        sports_count = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM tip_types_mappings;")
+        tips_count = cursor.fetchone()[0]
 
         if sports_count == 0:
             logger.info("📊 Loading initial sports mappings...")
             for mapping in SPORTS_MAPPINGS:
                 try:
                     embedding = generate_embedding(mapping["original"])
-                    sports_collection.add(
-                        embeddings=[embedding],
-                        documents=[mapping["original"]],
-                        metadatas=[{"unified": mapping["unified"]}],
-                        ids=[f"{mapping['original'].lower()}_{mapping['unified']}"]
-                    )
+                    cursor.execute("""
+                        INSERT INTO sports_mappings (original, unified, embedding)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (original, unified) DO NOTHING;
+                    """, (mapping["original"], mapping["unified"], embedding))
                 except Exception as e:
                     logger.warning(f"   ⚠️  Error adding sport mapping {mapping['original']}: {e}")
-            logger.info(f"   ✅ {sports_collection.count()} sports mappings loaded")
+
+            pg_conn.commit()
+            cursor.execute("SELECT COUNT(*) FROM sports_mappings;")
+            new_count = cursor.fetchone()[0]
+            logger.info(f"   ✅ {new_count} sports mappings loaded")
         else:
             logger.info(f"   ℹ️  Sports mappings already exist ({sports_count} items)")
 
@@ -115,17 +182,22 @@ async def load_initial_mappings():
             for mapping in TIP_TYPES_MAPPINGS:
                 try:
                     embedding = generate_embedding(mapping["original"])
-                    tips_collection.add(
-                        embeddings=[embedding],
-                        documents=[mapping["original"]],
-                        metadatas=[{"unified": mapping["unified"]}],
-                        ids=[f"{mapping['original'].lower()}_{mapping['unified']}"]
-                    )
+                    cursor.execute("""
+                        INSERT INTO tip_types_mappings (original, unified, embedding)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (original, unified) DO NOTHING;
+                    """, (mapping["original"], mapping["unified"], embedding))
                 except Exception as e:
                     logger.warning(f"   ⚠️  Error adding tip mapping {mapping['original']}: {e}")
-            logger.info(f"   ✅ {tips_collection.count()} tip types mappings loaded")
+
+            pg_conn.commit()
+            cursor.execute("SELECT COUNT(*) FROM tip_types_mappings;")
+            new_count = cursor.fetchone()[0]
+            logger.info(f"   ✅ {new_count} tip types mappings loaded")
         else:
             logger.info(f"   ℹ️  Tip types mappings already exist ({tips_count} items)")
+
+        cursor.close()
 
     except Exception as e:
         logger.error(f"❌ Error loading initial mappings: {e}")
@@ -149,17 +221,30 @@ def generate_embedding(text: str) -> list:
         )
 
 
-def search_in_collection(collection, text: str, threshold: float):
-    """Rechercher dans une collection ChromaDB"""
+def search_in_table(table_name: str, text: str, threshold: float):
+    """Rechercher dans une table PostgreSQL avec pgvector"""
+    global pg_conn
+
     try:
         embedding = generate_embedding(text)
 
-        results = collection.query(
-            query_embeddings=[embedding],
-            n_results=1
-        )
+        cursor = pg_conn.cursor(cursor_factory=RealDictCursor)
 
-        if not results["metadatas"][0]:
+        # Recherche par similarité cosinus (1 - distance cosinus = similarité)
+        cursor.execute(f"""
+            SELECT
+                original,
+                unified,
+                1 - (embedding <=> %s::vector) as confidence
+            FROM {table_name}
+            ORDER BY embedding <=> %s::vector
+            LIMIT 1;
+        """, (embedding, embedding))
+
+        result = cursor.fetchone()
+        cursor.close()
+
+        if not result:
             return {
                 "unified": text,
                 "confidence": 0.0,
@@ -167,12 +252,11 @@ def search_in_collection(collection, text: str, threshold: float):
                 "original": text
             }
 
-        distance = results["distances"][0][0]
-        confidence = 1 - distance
+        confidence = float(result["confidence"])
 
         if confidence >= threshold:
             return {
-                "unified": results["metadatas"][0][0]["unified"],
+                "unified": result["unified"],
                 "confidence": round(confidence, 3),
                 "needs_review": False,
                 "original": text
@@ -185,7 +269,7 @@ def search_in_collection(collection, text: str, threshold: float):
                 "original": text
             }
     except Exception as e:
-        logger.error(f"Error searching in collection: {e}")
+        logger.error(f"Error searching in table: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -197,22 +281,30 @@ router = APIRouter()
 @router.get("/health")
 def health():
     """Health check détaillé"""
+    global pg_conn
+
     try:
         # Tester Ollama
         client = ollama.Client(host=OLLAMA_URL)
         client.embeddings(model=OLLAMA_MODEL, prompt="test")
 
-        # Compter les entrées
-        sports_count = sports_collection.count() if sports_collection else 0
-        tips_count = tips_collection.count() if tips_collection else 0
+        # Tester PostgreSQL et compter les entrées
+        cursor = pg_conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM sports_mappings;")
+        sports_count = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM tip_types_mappings;")
+        tips_count = cursor.fetchone()[0]
+        cursor.close()
 
         return {
             "status": "healthy",
             "ollama": "ok",
             "ollama_url": OLLAMA_URL,
             "ollama_model": OLLAMA_MODEL,
-            "chromadb": "ok",
-            "chromadb_path": str(CHROMA_PATH),
+            "postgres": "ok",
+            "postgres_host": POSTGRES_HOST,
+            "postgres_db": POSTGRES_DB,
             "stats": {
                 "sports_mappings": sports_count,
                 "tip_types_mappings": tips_count
@@ -223,7 +315,9 @@ def health():
             "status": "unhealthy",
             "error": str(e),
             "ollama_url": OLLAMA_URL,
-            "ollama_model": OLLAMA_MODEL
+            "ollama_model": OLLAMA_MODEL,
+            "postgres_host": POSTGRES_HOST,
+            "postgres_db": POSTGRES_DB
         }
 
 
@@ -240,8 +334,8 @@ def unify_single(request: UnificationRequest):
             "threshold": 0.7
         }
     """
-    collection = sports_collection if request.type == "sport" else tips_collection
-    result = search_in_collection(collection, request.text, request.threshold)
+    table_name = "sports_mappings" if request.type == "sport" else "tip_types_mappings"
+    result = search_in_table(table_name, request.text, request.threshold)
 
     return UnificationResponse(**result)
 
@@ -268,8 +362,8 @@ def unify_bulk(request: BulkUnificationRequest):
 
         # Unifier sport si présent
         if "sport" in item and item["sport"]:
-            sport_result = search_in_collection(
-                sports_collection,
+            sport_result = search_in_table(
+                "sports_mappings",
                 item["sport"],
                 request.threshold
             )
@@ -279,8 +373,8 @@ def unify_bulk(request: BulkUnificationRequest):
 
         # Unifier tipText si présent
         if "tipText" in item and item["tipText"]:
-            tip_result = search_in_collection(
-                tips_collection,
+            tip_result = search_in_table(
+                "tip_types_mappings",
                 item["tipText"],
                 request.threshold
             )
@@ -310,19 +404,23 @@ def add_mapping(request: MappingRequest):
             "type": "sport"
         }
     """
+    global pg_conn
+
     try:
-        collection = sports_collection if request.type == "sport" else tips_collection
+        table_name = "sports_mappings" if request.type == "sport" else "tip_types_mappings"
 
         # Générer l'embedding
         embedding = generate_embedding(request.original)
 
-        # Ajouter à ChromaDB
-        collection.add(
-            embeddings=[embedding],
-            documents=[request.original],
-            metadatas=[{"unified": request.unified}],
-            ids=[f"{request.original.lower()}_{request.unified}"]
-        )
+        # Ajouter à PostgreSQL
+        cursor = pg_conn.cursor()
+        cursor.execute(f"""
+            INSERT INTO {table_name} (original, unified, embedding)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (original, unified) DO NOTHING;
+        """, (request.original, request.unified, embedding))
+        pg_conn.commit()
+        cursor.close()
 
         return {
             "success": True,
@@ -344,26 +442,33 @@ def add_bulk_mappings(mappings: List[MappingRequest]):
             {"original": "soccer", "unified": "football", "type": "sport"}
         ]
     """
+    global pg_conn
+
     added = 0
     errors = []
 
+    cursor = pg_conn.cursor()
+
     for mapping in mappings:
         try:
-            collection = sports_collection if mapping.type == "sport" else tips_collection
+            table_name = "sports_mappings" if mapping.type == "sport" else "tip_types_mappings"
             embedding = generate_embedding(mapping.original)
 
-            collection.add(
-                embeddings=[embedding],
-                documents=[mapping.original],
-                metadatas=[{"unified": mapping.unified}],
-                ids=[f"{mapping.original.lower()}_{mapping.unified}"]
-            )
+            cursor.execute(f"""
+                INSERT INTO {table_name} (original, unified, embedding)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (original, unified) DO NOTHING;
+            """, (mapping.original, mapping.unified, embedding))
+
             added += 1
         except Exception as e:
             errors.append({
                 "mapping": mapping.dict(),
                 "error": str(e)
             })
+
+    pg_conn.commit()
+    cursor.close()
 
     return {
         "success": True,
@@ -380,18 +485,17 @@ def get_mappings(type: str):
     Example:
         GET /unify/mappings/sport
     """
-    collection = sports_collection if type == "sport" else tips_collection
+    global pg_conn
+
+    table_name = "sports_mappings" if type == "sport" else "tip_types_mappings"
 
     try:
-        # ChromaDB get all
-        results = collection.get()
+        cursor = pg_conn.cursor(cursor_factory=RealDictCursor)
+        cursor.execute(f"SELECT original, unified FROM {table_name};")
+        results = cursor.fetchall()
+        cursor.close()
 
-        mappings = []
-        for i, doc in enumerate(results["documents"]):
-            mappings.append({
-                "original": doc,
-                "unified": results["metadatas"][i]["unified"]
-            })
+        mappings = [{"original": row["original"], "unified": row["unified"]} for row in results]
 
         return {
             "type": type,

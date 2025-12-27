@@ -77,7 +77,10 @@
       "Bash(if exist test_assopoker_quick.py del test_assopoker_quick.py)",
       "Bash(if exist test_assopoker_detailed.py del test_assopoker_detailed.py)",
       "Bash(if exist test_final_check.py del test_final_check.py)",
-      "Bash(if exist test_scrapers_id_source.py del test_scrapers_id_source.py)"
+      "Bash(if exist test_scrapers_id_source.py del test_scrapers_id_source.py)",
+      "Bash(cat:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(rm:*)"
     ]
   }
 }

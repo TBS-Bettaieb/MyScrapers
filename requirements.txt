@@ -3,6 +3,6 @@ selenium
 fastapi
 uvicorn[standard]
 beautifulsoup4
-chromadb==0.4.22
-ollama==0.1.6
-
+ollama>=0.6.0
+psycopg2-binary
+pgvector

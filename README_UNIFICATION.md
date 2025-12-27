@@ -2,7 +2,7 @@
 
 Le service d'unification est maintenant **intégré dans l'API principale** (`app.py`) sur le port **8001**.
 
-Il permet de normaliser les sports et types de paris provenant de différentes sources en utilisant **Ollama + ChromaDB** pour la recherche sémantique.
+Il permet de normaliser les sports et types de paris provenant de différentes sources en utilisant **Ollama + PostgreSQL (pgvector)** pour la recherche sémantique.
 
 ---
 
@@ -21,7 +21,8 @@ Il permet de normaliser les sports et types de paris provenant de différentes s
 └──────────────────────────────┼──────────┘
                                │
                     ┌──────────▼──────────┐
-                    │   ChromaDB          │
+                    │   PostgreSQL        │
+                    │   + pgvector        │
                     │   (Embeddings DB)   │
                     └──────────┬──────────┘
                                │
@@ -37,27 +38,49 @@ Il permet de normaliser les sports et types de paris provenant de différentes s
 
 ### Prérequis
 
-1. **Serveur Ollama** avec le modèle `nomic-embed-text` :
+1. **PostgreSQL** avec l'extension **pgvector** :
+   ```bash
+   # Installer PostgreSQL et pgvector
+   # Sur Debian/Ubuntu :
+   sudo apt install postgresql postgresql-contrib
+   sudo apt install postgresql-15-pgvector
+
+   # Créer la base de données
+   sudo -u postgres psql
+   CREATE DATABASE unification;
+   \c unification
+   CREATE EXTENSION vector;
+   ```
+
+2. **Serveur Ollama** avec le modèle `nomic-embed-text` :
    ```bash
    # Sur votre serveur Ollama
    ollama pull nomic-embed-text
    ollama serve
    ```
 
-2. **Variables d'environnement** :
+3. **Variables d'environnement** :
 
    Créer un fichier `.env` à la racine du projet :
    ```bash
    # URL de votre serveur Ollama privé
    OLLAMA_URL=http://votre-serveur-ollama:11434
    OLLAMA_MODEL=nomic-embed-text
-   CHROMA_PATH=/app/chroma_db
+
+   # Configuration PostgreSQL
+   POSTGRES_HOST=localhost
+   POSTGRES_PORT=5432
+   POSTGRES_DB=unification
+   POSTGRES_USER=postgres
+   POSTGRES_PASSWORD=postgres
    ```
 
    Ou bien dans `docker-compose.yml` :
    ```yaml
    environment:
      - OLLAMA_URL=http://votre-serveur-ollama:11434
+     - POSTGRES_HOST=postgres
+     - POSTGRES_DB=unification
    ```
 
 ---
@@ -70,10 +93,15 @@ Il permet de normaliser les sports et types de paris provenant de différentes s
 # 1. Installer les dépendances
 pip install -r requirements.txt
 
-# 2. Configurer l'URL Ollama
-export OLLAMA_URL=http://votre-serveur-ollama:11434
+# 2. Initialiser la base PostgreSQL
+psql -U postgres -d unification -f init_postgres.sql
 
-# 3. Lancer le service
+# 3. Configurer les variables d'environnement
+export OLLAMA_URL=http://votre-serveur-ollama:11434
+export POSTGRES_HOST=localhost
+export POSTGRES_DB=unification
+
+# 4. Lancer le service
 python -m uvicorn app:app --host 0.0.0.0 --port 8001
 ```
 
@@ -84,8 +112,7 @@ Le service sera disponible sur : **http://localhost:8001**
 ### Option 2 : Docker (recommandé)
 
 ```bash
-# 1. Configurer l'URL Ollama dans docker-compose.yml
-# Ou via variable d'environnement :
+# 1. Configurer les variables dans docker-compose.yml ou .env
 export OLLAMA_URL=http://votre-serveur-ollama:11434
 
 # 2. Construire et lancer
@@ -115,8 +142,9 @@ GET http://localhost:8001/unify/health
   "ollama": "ok",
   "ollama_url": "http://votre-serveur-ollama:11434",
   "ollama_model": "nomic-embed-text",
-  "chromadb": "ok",
-  "chromadb_path": "/app/chroma_db",
+  "postgres": "ok",
+  "postgres_host": "localhost",
+  "postgres_db": "unification",
   "stats": {
     "sports_mappings": 17,
     "tip_types_mappings": 68
@@ -441,7 +469,35 @@ curl -X POST http://localhost:8001/unify/bulk \
 
 ---
 
-### ChromaDB vide après restart
+### Erreur de connexion PostgreSQL
+
+**Symptôme :**
+```json
+{
+  "detail": "could not connect to server"
+}
+```
+
+**Solution :**
+1. Vérifier que PostgreSQL est démarré :
+   ```bash
+   sudo systemctl status postgresql
+   ```
+
+2. Vérifier les variables d'environnement :
+   ```bash
+   echo $POSTGRES_HOST
+   echo $POSTGRES_DB
+   ```
+
+3. Tester la connexion :
+   ```bash
+   psql -h $POSTGRES_HOST -U $POSTGRES_USER -d $POSTGRES_DB
+   ```
+
+---
+
+### Tables vides après restart
 
 **Symptôme :**
 ```json
@@ -454,14 +510,14 @@ curl -X POST http://localhost:8001/unify/bulk \
 ```
 
 **Solution :**
-1. Vérifier que le volume est bien monté :
-   ```bash
-   docker inspect investing-calendar-api | grep chroma_db
-   ```
-
-2. Re-démarrer le service (les mappings se chargeront automatiquement) :
+1. Re-démarrer le service (les mappings se chargeront automatiquement) :
    ```bash
    docker-compose restart
+   ```
+
+2. Ou importer manuellement :
+   ```bash
+   psql -U postgres -d unification -f init_postgres.sql
    ```
 
 ---
@@ -473,7 +529,8 @@ curl -X POST http://localhost:8001/unify/bulk \
 **Solution :**
 1. Vérifier la latence réseau vers le serveur Ollama
 2. Utiliser un serveur Ollama local si possible
-3. Mettre en cache les embeddings fréquents
+3. Créer les index pgvector si pas encore fait
+4. Analyser les requêtes lentes avec `EXPLAIN ANALYZE`
 
 ---
 
@@ -489,6 +546,20 @@ curl http://localhost:8001/unify/health | jq '.stats'
 
 ```bash
 curl http://localhost:8001/unify/mappings/sport | jq '.mappings | length'
+```
+
+### Requêtes PostgreSQL utiles
+
+```sql
+-- Compter les mappings
+SELECT COUNT(*) FROM sports_mappings;
+SELECT COUNT(*) FROM tip_types_mappings;
+
+-- Voir les derniers ajouts
+SELECT * FROM sports_mappings ORDER BY created_at DESC LIMIT 10;
+
+-- Rechercher un mapping spécifique
+SELECT * FROM sports_mappings WHERE original LIKE '%calcio%';
 ```
 
 ### Logs Docker
@@ -580,13 +651,15 @@ curl -X POST http://localhost:8001/unify/mapping/bulk-add \
 
 ## ✅ Checklist de déploiement
 
+- [ ] PostgreSQL installé avec extension pgvector
+- [ ] Base de données `unification` créée
+- [ ] Tables initialisées (`init_postgres.sql`)
 - [ ] Serveur Ollama démarré avec modèle `nomic-embed-text`
-- [ ] Variable `OLLAMA_URL` configurée
+- [ ] Variables `OLLAMA_URL` et `POSTGRES_*` configurées
 - [ ] Docker Compose lancé : `docker-compose up -d`
 - [ ] Health check OK : `curl http://localhost:8001/unify/health`
 - [ ] Mappings chargés (stats > 0)
 - [ ] Test d'unification fonctionnel
-- [ ] Volume `chroma_db` persistant configuré
 - [ ] N8N configuré pour appeler `/unify/bulk`
 - [ ] Workflow de validation Airtable en place (optionnel)
 
@@ -597,23 +670,26 @@ curl -X POST http://localhost:8001/unify/mapping/bulk-add \
 ✅ **Point d'entrée unique** : Tout sur le port 8001
 ✅ **Auto-initialisation** : Mappings chargés automatiquement au démarrage
 ✅ **Serveur Ollama externe** : Réutilisable par d'autres services
-✅ **Persistance ChromaDB** : Les mappings ajoutés sont conservés
+✅ **PostgreSQL + pgvector** : Base de données robuste et performante
+✅ **Recherche vectorielle optimisée** : Index ivfflat pour la rapidité
 ✅ **Compatible N8N** : Endpoint `/unify/bulk` optimisé pour batch
 ✅ **Extensible** : Ajout facile de nouveaux mappings via API
 ✅ **Recherche sémantique** : Gère les typos et variantes linguistiques
 ✅ **Validation progressive** : Flag `needs_review` pour les cas incertains
+✅ **Requêtes SQL** : Accès direct aux données pour analyse
 
 ---
 
 ## 📚 Ressources
 
 - [Documentation Ollama](https://ollama.com/library/nomic-embed-text)
-- [ChromaDB Documentation](https://docs.trychroma.com/)
+- [pgvector Documentation](https://github.com/pgvector/pgvector)
+- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [N8N Workflow Automation](https://n8n.io/)
 
 ---
 
-**Version :** 1.2.0
-**Date :** 2025-12-26
+**Version :** 2.0.0
+**Date :** 2025-12-28
 **Auteur :** Generated with Claude Code
